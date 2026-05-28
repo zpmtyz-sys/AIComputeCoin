@@ -1,0 +1,18 @@
+{
+  "project": {
+    "name": "ComputeCoin",
+    "description": "Global compute power financialization trading platform",
+    "type": "monorepo"
+  },
+  "workflows_dir": ".claude/workflows",
+  "context_files": [
+    "CLAUDE.md",
+    "docs/ARCHITECTURE.md",
+    "docs/ITERATION_PLAN.md"
+  ],
+  "conventions": {
+    "commits": "conventional",
+    "testing": "tdd",
+    "branching": "github-flow"
+  }
+}

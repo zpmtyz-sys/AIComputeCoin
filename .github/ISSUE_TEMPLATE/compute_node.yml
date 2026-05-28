@@ -1,0 +1,84 @@
+name: Compute Node Onboarding
+description: Register a new compute node to the network
+labels: ["compute-node", "onboarding"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Welcome to the ComputeCoin network! Please provide details about your compute node.
+
+  - type: input
+    id: gpu-model
+    attributes:
+      label: GPU Model
+      description: The model of your GPU (e.g., NVIDIA A100, RTX 4090).
+      placeholder: "NVIDIA A100 80GB"
+    validations:
+      required: true
+
+  - type: input
+    id: gpu-count
+    attributes:
+      label: GPU Count
+      description: Number of GPUs in this node.
+      placeholder: "8"
+    validations:
+      required: true
+
+  - type: input
+    id: vram-per-gpu
+    attributes:
+      label: VRAM per GPU
+      description: Video memory per GPU in GB.
+      placeholder: "80"
+    validations:
+      required: true
+
+  - type: input
+    id: expected-cu
+    attributes:
+      label: Expected CU Capacity
+      description: Expected Compute Units based on hardware specs.
+      placeholder: "1000"
+    validations:
+      required: true
+
+  - type: input
+    id: location
+    attributes:
+      label: Location / Region
+      description: Data center location or geographic region.
+      placeholder: "US-East (Virginia)"
+    validations:
+      required: true
+
+  - type: input
+    id: network-bandwidth
+    attributes:
+      label: Network Bandwidth
+      description: Available network bandwidth (upload/download).
+      placeholder: "10 Gbps symmetric"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: availability
+    attributes:
+      label: Availability Commitment
+      description: What uptime SLA can you commit to?
+      options:
+        - "99.9%"
+        - "99.5%"
+        - "99%"
+        - "95%"
+    validations:
+      required: true
+
+  - type: input
+    id: operator-contact
+    attributes:
+      label: Operator Contact
+      description: Contact email or handle for the node operator.
+      placeholder: "operator@example.com"
+    validations:
+      required: true
