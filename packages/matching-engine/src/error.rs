@@ -8,6 +8,9 @@ pub enum EngineError {
     #[error("order not found: {0}")]
     OrderNotFound(String),
 
+    #[error("permission denied: {0}")]
+    PermissionDenied(String),
+
     #[error("insufficient quantity")]
     InsufficientQuantity,
 

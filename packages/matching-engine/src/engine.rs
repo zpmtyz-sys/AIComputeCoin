@@ -5,11 +5,16 @@ use crate::error::EngineError;
 use crate::orderbook::OrderBook;
 use crate::types::{Order, OrderStatus, OrderType, Side, Trade};
 
+/// Maximum number of trades retained in history to prevent unbounded memory growth.
+const MAX_TRADE_HISTORY: usize = 100_000;
+
 /// Matching engine implementing price-time priority order matching.
 pub struct MatchingEngine {
     pub orderbook: OrderBook,
     pub trades: Vec<Trade>,
     pub pending_stops: Vec<Order>,
+    /// Monotonically increasing sequence number, incremented on every process_order and cancel_order call.
+    pub sequence_id: u64,
 }
 
 impl MatchingEngine {
@@ -18,6 +23,7 @@ impl MatchingEngine {
             orderbook: OrderBook::new(pair),
             trades: Vec::new(),
             pending_stops: Vec::new(),
+            sequence_id: 0,
         }
     }
 
@@ -39,6 +45,8 @@ impl MatchingEngine {
                 "quantity must be positive".to_string(),
             ));
         }
+
+        self.sequence_id += 1;
 
         let trades = match order.order_type {
             OrderType::Market => self.match_order(&mut order),
@@ -79,14 +87,18 @@ impl MatchingEngine {
             self.trades.extend(stop_trades.clone());
             let mut all_trades = trades;
             all_trades.extend(stop_trades);
+            self.cap_trade_history();
             return Ok(all_trades);
         }
 
+        self.cap_trade_history();
         Ok(trades)
     }
 
     /// Cancel an order by ID, searching both the orderbook and pending stops.
     pub fn cancel_order(&mut self, order_id: Uuid) -> Result<Order, EngineError> {
+        self.sequence_id += 1;
+
         // Search bids side
         if let Some(order) = self.orderbook.cancel_order(order_id, Side::Bid) {
             return Ok(order);
@@ -104,6 +116,58 @@ impl MatchingEngine {
         }
 
         Err(EngineError::OrderNotFound(order_id.to_string()))
+    }
+
+    /// Cancel an order by ID, but only if it belongs to the given user_id.
+    /// Returns PermissionDenied error if the order belongs to a different user.
+    pub fn cancel_order_by_user(
+        &mut self,
+        order_id: Uuid,
+        user_id: &str,
+    ) -> Result<Order, EngineError> {
+        // First, find the order without removing it to check ownership
+        let owner = self.find_order_owner(order_id);
+        match owner {
+            Some(found_user_id) => {
+                if found_user_id != user_id {
+                    return Err(EngineError::PermissionDenied(
+                        "user_id does not match order owner".to_string(),
+                    ));
+                }
+                self.cancel_order(order_id)
+            }
+            None => Err(EngineError::OrderNotFound(order_id.to_string())),
+        }
+    }
+
+    /// Find the user_id of an order by its ID without removing it.
+    fn find_order_owner(&self, order_id: Uuid) -> Option<String> {
+        // Search bids
+        for queue in self.orderbook.bids.values() {
+            for order in queue.iter() {
+                if order.id == order_id {
+                    return Some(order.user_id.clone());
+                }
+            }
+        }
+
+        // Search asks
+        for queue in self.orderbook.asks.values() {
+            for order in queue.iter() {
+                if order.id == order_id {
+                    return Some(order.user_id.clone());
+                }
+            }
+        }
+
+        // Search pending stops
+        for order in &self.pending_stops {
+            if order.id == order_id {
+                return Some(order.user_id.clone());
+            }
+        }
+
+        None
     }
 
     /// Check pending stop orders against the last trade price.
@@ -146,6 +210,14 @@ impl MatchingEngine {
         }
 
         all_trades
+    }
+
+    /// Cap trade history to MAX_TRADE_HISTORY entries to prevent unbounded memory growth.
+    fn cap_trade_history(&mut self) {
+        if self.trades.len() > MAX_TRADE_HISTORY {
+            let excess = self.trades.len() - MAX_TRADE_HISTORY;
+            self.trades.drain(..excess);
+        }
     }
 
     fn match_order(&mut self, order: &mut Order) -> Vec<Trade> {
@@ -194,6 +266,8 @@ impl MatchingEngine {
                     let maker = queue.front().unwrap();
 
                     // Self-trade prevention: if same user, remove maker and skip
+                    // TODO: Production should emit cancel events for removed maker orders
+                    // so subscribers and the maker are notified of the cancellation.
                     if order.user_id == maker.user_id {
                         queue.pop_front();
                         continue;

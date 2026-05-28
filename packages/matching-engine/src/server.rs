@@ -59,10 +59,14 @@ impl MatchingService for MatchingServiceImpl {
             .process_order(internal_order.clone())
             .map_err(|e| Status::internal(e.to_string()))?;
 
-        // Update filled_quantity from the engine result
-        // The process_order mutates the order in place via &mut, but we cloned before.
-        // Re-read the filled quantity from trades.
-        let total_filled: Decimal = trades.iter().map(|t| t.quantity).sum();
+        // Update filled_quantity from the engine result.
+        // Only sum trades where this order is the taker to avoid counting
+        // stop-triggered trades from other orders.
+        let total_filled: Decimal = trades
+            .iter()
+            .filter(|t| t.taker_order_id == internal_order.id)
+            .map(|t| t.quantity)
+            .sum();
         internal_order.filled_quantity = total_filled;
 
         let proto_trades: Vec<proto::Trade> = trades.iter().map(internal_trade_to_proto).collect();
@@ -92,7 +96,7 @@ impl MatchingService for MatchingServiceImpl {
                     order_count: 0,
                 })
                 .collect(),
-            sequence_id: 0,
+            sequence_id: engine.sequence_id,
         };
         let _ = self.orderbook_tx.send(ob_response);
 
@@ -113,8 +117,13 @@ impl MatchingService for MatchingServiceImpl {
 
         let mut engine = self.engine.lock().await;
         let order = engine
-            .cancel_order(order_id)
-            .map_err(|e| Status::not_found(e.to_string()))?;
+            .cancel_order_by_user(order_id, &req.user_id)
+            .map_err(|e| match &e {
+                crate::error::EngineError::PermissionDenied(_) => {
+                    Status::permission_denied(e.to_string())
+                }
+                _ => Status::not_found(e.to_string()),
+            })?;
 
         Ok(Response::new(proto::CancelOrderResponse {
             order: Some(internal_order_to_proto(&order)),
@@ -153,7 +162,7 @@ impl MatchingService for MatchingServiceImpl {
                     order_count: 0,
                 })
                 .collect(),
-            sequence_id: 0,
+            sequence_id: engine.sequence_id,
         };
 
         Ok(Response::new(response))
@@ -184,7 +193,11 @@ impl MatchingService for MatchingServiceImpl {
         &self,
         _request: Request<proto::GetOrderBookRequest>,
     ) -> Result<Response<Self::SubscribeOrderBookStream>, Status> {
+        // TODO: Send an initial order book snapshot on subscribe so clients can
+        // bootstrap current state without a separate GetOrderBook call and reconciliation.
         let rx = self.orderbook_tx.subscribe();
+        // TODO: Silent lag drops need sequence-based gap detection so clients can
+        // identify missed messages and request replay or re-snapshot.
         let stream = BroadcastStream::new(rx).filter_map(|result| match result {
             Ok(msg) => Some(Ok(msg)),
             Err(tokio_stream::wrappers::errors::BroadcastStreamRecvError::Lagged(_)) => None,
@@ -196,7 +209,11 @@ impl MatchingService for MatchingServiceImpl {
         &self,
         _request: Request<proto::SubscribeTradesRequest>,
     ) -> Result<Response<Self::SubscribeTradesStream>, Status> {
+        // TODO: Send initial trade snapshot on subscribe so clients joining mid-session
+        // have recent trade history without a separate GetTrades call.
         let rx = self.trade_tx.subscribe();
+        // TODO: Silent lag drops need sequence-based gap detection so clients can
+        // identify missed messages and request replay.
         let stream = BroadcastStream::new(rx).filter_map(|result| match result {
             Ok(msg) => Some(Ok(msg)),
             Err(tokio_stream::wrappers::errors::BroadcastStreamRecvError::Lagged(_)) => None,
@@ -231,6 +248,11 @@ fn internal_order_to_proto(order: &crate::types::Order) -> proto::Order {
         }
     };
 
+    let stop_price = match order.stop_price {
+        Some(sp) => sp.to_string(),
+        None => String::new(),
+    };
+
     proto::Order {
         id: order.id.to_string(),
         user_id: order.user_id.clone(),
@@ -243,6 +265,7 @@ fn internal_order_to_proto(order: &crate::types::Order) -> proto::Order {
         status,
         created_at: order.timestamp as i64,
         updated_at: order.timestamp as i64,
+        stop_price,
     }
 }
 
@@ -289,6 +312,17 @@ fn proto_order_to_internal(proto_order: &proto::Order) -> Result<crate::types::O
             .map_err(|e| Status::invalid_argument(format!("invalid id: {}", e)))?
     };
 
+    let stop_price = if proto_order.stop_price.is_empty() {
+        None
+    } else {
+        Some(
+            proto_order
+                .stop_price
+                .parse::<Decimal>()
+                .map_err(|e| Status::invalid_argument(format!("invalid stop_price: {}", e)))?,
+        )
+    };
+
     Ok(crate::types::Order {
         id,
         user_id: proto_order.user_id.clone(),
@@ -298,7 +332,7 @@ fn proto_order_to_internal(proto_order: &proto::Order) -> Result<crate::types::O
         price,
         quantity,
         filled_quantity,
-        stop_price: None,
+        stop_price,
         timestamp: proto_order.created_at as u64,
     })
 }
@@ -341,6 +375,7 @@ mod tests {
             status: proto::OrderStatus::New as i32,
             created_at: 1700000000,
             updated_at: 1700000000,
+            stop_price: "".to_string(),
         };
 
         let internal = proto_order_to_internal(&proto_order).unwrap();
@@ -444,6 +479,7 @@ mod tests {
             status: proto::OrderStatus::New as i32,
             created_at: 0,
             updated_at: 0,
+            stop_price: "".to_string(),
         };
 
         let internal = proto_order_to_internal(&proto_order).unwrap();
@@ -468,6 +504,7 @@ mod tests {
             status: proto::OrderStatus::New as i32,
             created_at: 0,
             updated_at: 0,
+            stop_price: "".to_string(),
         };
 
         let result = proto_order_to_internal(&proto_order);
@@ -488,6 +525,7 @@ mod tests {
             status: proto::OrderStatus::New as i32,
             created_at: 0,
             updated_at: 0,
+            stop_price: "".to_string(),
         };
 
         let result = proto_order_to_internal(&proto_order);
