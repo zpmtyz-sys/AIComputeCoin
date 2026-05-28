@@ -1,0 +1,135 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: computecoin
+      POSTGRES_PASSWORD: computecoin_dev
+      POSTGRES_DB: computecoin
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - computecoin-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U computecoin"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - computecoin-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,HOST://localhost:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,HOST://0.0.0.0:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - computecoin-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  matching-engine:
+    build:
+      context: ./packages/matching-engine
+      dockerfile: Dockerfile
+    ports:
+      - "50051:50051"
+    environment:
+      RUST_LOG: info
+    networks:
+      - computecoin-network
+
+  api-gateway:
+    build:
+      context: ./packages/api-gateway
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      DATABASE_URL: postgresql://computecoin:computecoin_dev@postgres:5432/computecoin
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: kafka:29092
+      MATCHING_ENGINE_URL: http://matching-engine:50051
+      JWT_SECRET: dev-secret-change-in-production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - computecoin-network
+
+  trading-service:
+    build:
+      context: ./packages/trading-service
+      dockerfile: Dockerfile
+    ports:
+      - "50052:50052"
+    environment:
+      PORT: "50052"
+      DATABASE_URL: postgresql://computecoin:computecoin_dev@postgres:5432/computecoin
+      KAFKA_BROKERS: kafka:29092
+      MATCHING_ENGINE_URL: matching-engine:50051
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - computecoin-network
+
+  oracle-service:
+    build:
+      context: ./packages/oracle-service
+      dockerfile: Dockerfile
+    ports:
+      - "50053:50053"
+    environment:
+      PORT: "50053"
+      CHAIN_RPC_URL: http://localhost:26657
+    networks:
+      - computecoin-network
+
+volumes:
+  postgres-data:
+  redis-data:
+  kafka-data:
+
+networks:
+  computecoin-network:
+    driver: bridge

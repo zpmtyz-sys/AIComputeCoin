@@ -1,0 +1,4 @@
+packages:
+  - 'packages/api-gateway'
+  - 'packages/web-app'
+  - 'packages/shared'

@@ -1,0 +1,33 @@
+# Node.js
+node_modules/
+dist/
+.next/
+*.log
+coverage/
+
+# Rust
+target/
+
+# Go
+vendor/
+pkg/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Environment
+.env
+!.env.example
+
+# OS
+.DS_Store
+*.swp
+*.swo
+tmp/
+
+# IDEs
+.idea/
+.vscode/
+!.vscode/settings.json
