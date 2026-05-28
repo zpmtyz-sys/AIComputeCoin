@@ -478,7 +478,7 @@ mod tests {
         let trades = engine2.process_order(buy_at_100).unwrap();
 
         // Trade at 100 generated, stop order with stop_price=100 should activate (100 <= 100)
-        assert!(trades.len() >= 1);
+        assert!(!trades.is_empty());
         // The stop order should have been activated
         assert_eq!(engine2.pending_stops.len(), 0);
     }
