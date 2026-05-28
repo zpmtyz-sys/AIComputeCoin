@@ -113,25 +113,21 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-${{ matrix.package }}-${{ hashFiles('packages/' + matrix.package + '/pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-pnpm-${{ matrix.package }}-
+            ${{ runner.os }}-pnpm-
 
       - name: Install dependencies
-        working-directory: packages/${{ matrix.package }}
         run: pnpm install
 
       - name: Run lint
-        working-directory: packages/${{ matrix.package }}
-        run: pnpm lint
+        run: pnpm --filter @computecoin/${{ matrix.package }} lint
 
       - name: Run tests
-        working-directory: packages/${{ matrix.package }}
-        run: pnpm test
+        run: pnpm --filter @computecoin/${{ matrix.package }} test
 
       - name: Build
-        working-directory: packages/${{ matrix.package }}
-        run: pnpm build
+        run: pnpm --filter @computecoin/${{ matrix.package }} build
 
   docker-build:
     name: Docker Build - ${{ matrix.service }}

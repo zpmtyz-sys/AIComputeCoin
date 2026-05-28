@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// On-chain address represented as 32 bytes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Address(pub [u8; 32]);
 
 /// Token balance type (supports up to 2^128 - 1 smallest units).

@@ -62,8 +62,8 @@ services:
 
   matching-engine:
     build:
-      context: ./packages/matching-engine
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: packages/matching-engine/Dockerfile
     ports:
       - "50051:50051"
     environment:

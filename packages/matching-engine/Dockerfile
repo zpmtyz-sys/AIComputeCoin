@@ -3,10 +3,10 @@ FROM rust:1.92-slim AS builder
 WORKDIR /app
 
 # Copy shared proto files
-COPY ../shared/proto /app/shared/proto
+COPY packages/shared/proto /app/shared/proto
 
 # Copy matching engine source
-COPY . /app/matching-engine
+COPY packages/matching-engine /app/matching-engine
 
 WORKDIR /app/matching-engine
 

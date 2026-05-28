@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use crate::types::{Address, Balance};
 
@@ -22,7 +22,7 @@ pub enum StakingError {
 
 /// Simple staking pool implementation.
 pub struct StakingPool {
-    stakes: HashMap<Address, Balance>,
+    stakes: BTreeMap<Address, Balance>,
     total_staked: Balance,
     min_stake: Balance,
 }
@@ -30,7 +30,7 @@ pub struct StakingPool {
 impl StakingPool {
     pub fn new(min_stake: Balance) -> Self {
         Self {
-            stakes: HashMap::new(),
+            stakes: BTreeMap::new(),
             total_staked: 0,
             min_stake,
         }
