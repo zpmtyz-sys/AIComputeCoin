@@ -73,18 +73,27 @@ impl Staking for StakingPool {
         if self.total_staked == 0 {
             return Ok(());
         }
-        // Distribute proportionally to stake
+        // Distribute proportionally to stake, tracking dust from integer truncation
         let stakers: Vec<(Address, Balance)> = self.stakes.iter().map(|(a, s)| (*a, *s)).collect();
-        for (account, stake) in stakers {
-            let reward = (stake as u128)
-                .checked_mul(total_reward)
-                .ok_or(StakingError::Overflow)?
-                / self.total_staked;
+        let mut distributed: Balance = 0;
+        let staker_count = stakers.len();
+
+        for (i, (account, stake)) in stakers.iter().enumerate() {
+            let reward = if i == staker_count - 1 {
+                // Award remaining (including accumulated dust) to the last staker
+                total_reward - distributed
+            } else {
+                (*stake as u128)
+                    .checked_mul(total_reward)
+                    .ok_or(StakingError::Overflow)?
+                    / self.total_staked
+            };
+            distributed += reward;
             if reward > 0 {
-                *self.stakes.entry(account).or_insert(0) += reward;
-                self.total_staked += reward;
+                *self.stakes.entry(*account).or_insert(0) += reward;
             }
         }
+        self.total_staked += total_reward;
         Ok(())
     }
 }

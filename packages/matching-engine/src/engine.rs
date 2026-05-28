@@ -1,3 +1,4 @@
+use rust_decimal::Decimal;
 use uuid::Uuid;
 
 use crate::error::EngineError;
@@ -19,7 +20,7 @@ impl MatchingEngine {
     /// Process an incoming order against the order book.
     /// Returns a list of trades that resulted from matching.
     pub fn process_order(&mut self, mut order: Order) -> Result<Vec<Trade>, EngineError> {
-        if order.quantity <= 0.0 {
+        if order.quantity <= Decimal::ZERO {
             return Err(EngineError::InvalidOrder(
                 "quantity must be positive".to_string(),
             ));
@@ -31,7 +32,7 @@ impl MatchingEngine {
                 let trades = self.match_order(&mut order);
                 // Place remaining quantity on the book
                 let remaining = order.quantity - order.filled_quantity;
-                if remaining > 0.0 {
+                if remaining > Decimal::ZERO {
                     self.orderbook.add_order(order);
                 }
                 trades
@@ -54,7 +55,7 @@ impl MatchingEngine {
                 // once the stop price is triggered (simplified here as immediate placement)
                 let trades = self.match_order(&mut order);
                 let remaining = order.quantity - order.filled_quantity;
-                if remaining > 0.0 {
+                if remaining > Decimal::ZERO {
                     self.orderbook.add_order(order);
                 }
                 trades
@@ -70,7 +71,7 @@ impl MatchingEngine {
 
         loop {
             let remaining = order.quantity - order.filled_quantity;
-            if remaining <= 0.0 {
+            if remaining <= Decimal::ZERO {
                 break;
             }
 
@@ -105,7 +106,9 @@ impl MatchingEngine {
             };
 
             if let Some(queue) = opposite_book.get_mut(&best_price) {
-                while !queue.is_empty() && (order.quantity - order.filled_quantity) > 0.0 {
+                while !queue.is_empty()
+                    && (order.quantity - order.filled_quantity) > Decimal::ZERO
+                {
                     let maker = queue.front_mut().unwrap();
                     let maker_remaining = maker.quantity - maker.filled_quantity;
                     let taker_remaining = order.quantity - order.filled_quantity;
@@ -119,7 +122,7 @@ impl MatchingEngine {
                         maker_order_id: maker.id,
                         taker_order_id: order.id,
                         pair: order.pair.clone(),
-                        price: best_price.into_inner(),
+                        price: best_price,
                         quantity: fill_qty,
                         side: order.side,
                         timestamp,
@@ -145,34 +148,46 @@ impl MatchingEngine {
     }
 
     fn can_fill_fully(&self, order: &Order) -> bool {
-        let opposite_book = match order.side {
-            Side::Bid => &self.orderbook.asks,
-            Side::Ask => &self.orderbook.bids,
-        };
+        let mut available = Decimal::ZERO;
 
-        let mut available = 0.0;
-        for (price, queue) in opposite_book.iter() {
-            let price_ok = match order.side {
-                Side::Bid => *price <= order.price,
-                Side::Ask => *price >= order.price,
-            };
-            if !price_ok {
-                break;
+        match order.side {
+            Side::Bid => {
+                // For a buy, iterate asks in ascending order (lowest price first)
+                for (price, queue) in self.orderbook.asks.iter() {
+                    if *price > order.price {
+                        break;
+                    }
+                    for o in queue.iter() {
+                        available += o.quantity - o.filled_quantity;
+                        if available >= order.quantity {
+                            return true;
+                        }
+                    }
+                }
             }
-            for o in queue.iter() {
-                available += o.quantity - o.filled_quantity;
-                if available >= order.quantity {
-                    return true;
+            Side::Ask => {
+                // For a sell, iterate bids in reverse (highest price first)
+                for (price, queue) in self.orderbook.bids.iter().rev() {
+                    if *price < order.price {
+                        break;
+                    }
+                    for o in queue.iter() {
+                        available += o.quantity - o.filled_quantity;
+                        if available >= order.quantity {
+                            return true;
+                        }
+                    }
                 }
             }
         }
+
         available >= order.quantity
     }
 }
 
 impl Order {
     pub fn status(&self) -> OrderStatus {
-        if self.filled_quantity == 0.0 {
+        if self.filled_quantity == Decimal::ZERO {
             OrderStatus::New
         } else if self.filled_quantity >= self.quantity {
             OrderStatus::Filled

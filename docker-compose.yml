@@ -6,9 +6,9 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: computecoin
-      POSTGRES_PASSWORD: computecoin_dev
-      POSTGRES_DB: computecoin
+      POSTGRES_USER: ${POSTGRES_USER:-computecoin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-computecoin_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-computecoin}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
@@ -79,11 +79,11 @@ services:
       - "3000:3000"
     environment:
       PORT: "3000"
-      DATABASE_URL: postgresql://computecoin:computecoin_dev@postgres:5432/computecoin
+      DATABASE_URL: postgresql://${POSTGRES_USER:-computecoin}:${POSTGRES_PASSWORD:-computecoin_dev}@postgres:5432/${POSTGRES_DB:-computecoin}
       REDIS_URL: redis://redis:6379
       KAFKA_BROKERS: kafka:29092
       MATCHING_ENGINE_URL: http://matching-engine:50051
-      JWT_SECRET: dev-secret-change-in-production
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
     depends_on:
       postgres:
         condition: service_healthy
@@ -102,7 +102,7 @@ services:
       - "50052:50052"
     environment:
       PORT: "50052"
-      DATABASE_URL: postgresql://computecoin:computecoin_dev@postgres:5432/computecoin
+      DATABASE_URL: postgresql://${POSTGRES_USER:-computecoin}:${POSTGRES_PASSWORD:-computecoin_dev}@postgres:5432/${POSTGRES_DB:-computecoin}
       KAFKA_BROKERS: kafka:29092
       MATCHING_ENGINE_URL: matching-engine:50051
     depends_on:

@@ -1,13 +1,13 @@
 use std::collections::{BTreeMap, VecDeque};
 
-use ordered_float::OrderedFloat;
+use rust_decimal::Decimal;
 
 use crate::types::{Order, Side};
 
 /// Order book maintaining price-time priority for bids and asks.
 pub struct OrderBook {
-    pub bids: BTreeMap<OrderedFloat<f64>, VecDeque<Order>>,
-    pub asks: BTreeMap<OrderedFloat<f64>, VecDeque<Order>>,
+    pub bids: BTreeMap<Decimal, VecDeque<Order>>,
+    pub asks: BTreeMap<Decimal, VecDeque<Order>>,
     pub pair: String,
 }
 
@@ -42,33 +42,33 @@ impl OrderBook {
         None
     }
 
-    pub fn best_bid(&self) -> Option<OrderedFloat<f64>> {
+    pub fn best_bid(&self) -> Option<Decimal> {
         self.bids.keys().next_back().copied()
     }
 
-    pub fn best_ask(&self) -> Option<OrderedFloat<f64>> {
+    pub fn best_ask(&self) -> Option<Decimal> {
         self.asks.keys().next().copied()
     }
 
-    pub fn depth(&self, levels: usize) -> (Vec<(f64, f64)>, Vec<(f64, f64)>) {
-        let bids: Vec<(f64, f64)> = self
+    pub fn depth(&self, levels: usize) -> (Vec<(Decimal, Decimal)>, Vec<(Decimal, Decimal)>) {
+        let bids: Vec<(Decimal, Decimal)> = self
             .bids
             .iter()
             .rev()
             .take(levels)
             .map(|(price, orders)| {
-                let total_qty: f64 = orders.iter().map(|o| o.quantity - o.filled_quantity).sum();
-                (price.into_inner(), total_qty)
+                let total_qty: Decimal = orders.iter().map(|o| o.quantity - o.filled_quantity).sum();
+                (*price, total_qty)
             })
             .collect();
 
-        let asks: Vec<(f64, f64)> = self
+        let asks: Vec<(Decimal, Decimal)> = self
             .asks
             .iter()
             .take(levels)
             .map(|(price, orders)| {
-                let total_qty: f64 = orders.iter().map(|o| o.quantity - o.filled_quantity).sum();
-                (price.into_inner(), total_qty)
+                let total_qty: Decimal = orders.iter().map(|o| o.quantity - o.filled_quantity).sum();
+                (*price, total_qty)
             })
             .collect();
 

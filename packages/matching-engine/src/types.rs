@@ -1,4 +1,4 @@
-use ordered_float::OrderedFloat;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -32,9 +32,9 @@ pub struct Order {
     pub pair: String,
     pub side: Side,
     pub order_type: OrderType,
-    pub price: OrderedFloat<f64>,
-    pub quantity: f64,
-    pub filled_quantity: f64,
+    pub price: Decimal,
+    pub quantity: Decimal,
+    pub filled_quantity: Decimal,
     pub timestamp: u64,
 }
 
@@ -44,8 +44,8 @@ pub struct Trade {
     pub maker_order_id: Uuid,
     pub taker_order_id: Uuid,
     pub pair: String,
-    pub price: f64,
-    pub quantity: f64,
+    pub price: Decimal,
+    pub quantity: Decimal,
     pub side: Side,
     pub timestamp: u64,
 }
