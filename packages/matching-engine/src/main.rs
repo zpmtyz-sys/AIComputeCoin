@@ -1,6 +1,6 @@
-use std::net::SocketAddr;
-
-use tokio::net::TcpListener;
+use computecoin_matching_engine::server::proto::matching_service_server::MatchingServiceServer;
+use computecoin_matching_engine::server::MatchingServiceImpl;
+use tonic::transport::Server;
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
@@ -11,32 +11,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!("Starting ComputeCoin Matching Engine");
 
-    let addr: SocketAddr = "[::]:50051".parse()?;
-    let listener = TcpListener::bind(addr).await?;
+    let addr = "[::]:50051".parse()?;
+    let service = MatchingServiceImpl::new("CU/USDT".to_string());
+
     tracing::info!("gRPC server listening on {}", addr);
 
-    // The full gRPC service will be registered once proto-generated code is integrated.
-    // For now, accept connections to verify the server starts correctly.
-    tokio::select! {
-        _ = accept_loop(listener) => {}
-        _ = tokio::signal::ctrl_c() => {
+    Server::builder()
+        .add_service(MatchingServiceServer::new(service))
+        .serve_with_shutdown(addr, async {
+            tokio::signal::ctrl_c()
+                .await
+                .expect("failed to listen for ctrl_c");
             tracing::info!("Received shutdown signal, gracefully stopping...");
-        }
-    }
+        })
+        .await?;
 
     tracing::info!("Matching engine stopped.");
     Ok(())
-}
-
-async fn accept_loop(listener: TcpListener) {
-    loop {
-        match listener.accept().await {
-            Ok((_stream, addr)) => {
-                tracing::debug!("Connection from {}", addr);
-            }
-            Err(e) => {
-                tracing::error!("Accept error: {}", e);
-            }
-        }
-    }
 }
