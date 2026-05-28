@@ -114,9 +114,27 @@ message GetOrderBookResponse {
   uint64 sequence_id = 4;
 }
 
+// Request/Response messages for GetTrades
+message GetTradesRequest {
+  string pair = 1;
+  uint32 limit = 2;
+}
+
+message GetTradesResponse {
+  repeated Trade trades = 1;
+}
+
+// Request message for SubscribeTrades
+message SubscribeTradesRequest {
+  string pair = 1;
+}
+
 // Matching engine gRPC service
 service MatchingService {
   rpc SubmitOrder(SubmitOrderRequest) returns (SubmitOrderResponse);
   rpc CancelOrder(CancelOrderRequest) returns (CancelOrderResponse);
   rpc GetOrderBook(GetOrderBookRequest) returns (GetOrderBookResponse);
+  rpc GetTrades(GetTradesRequest) returns (GetTradesResponse);
+  rpc SubscribeOrderBook(GetOrderBookRequest) returns (stream GetOrderBookResponse);
+  rpc SubscribeTrades(SubscribeTradesRequest) returns (stream Trade);
 }

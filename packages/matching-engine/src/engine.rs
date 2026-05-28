@@ -8,12 +8,26 @@ use crate::types::{Order, OrderStatus, OrderType, Side, Trade};
 /// Matching engine implementing price-time priority order matching.
 pub struct MatchingEngine {
     pub orderbook: OrderBook,
+    pub trades: Vec<Trade>,
+    pub pending_stops: Vec<Order>,
 }
 
 impl MatchingEngine {
     pub fn new(pair: String) -> Self {
         Self {
             orderbook: OrderBook::new(pair),
+            trades: Vec::new(),
+            pending_stops: Vec::new(),
+        }
+    }
+
+    /// Returns the most recent `limit` trades.
+    pub fn get_trades(&self, limit: usize) -> Vec<Trade> {
+        let len = self.trades.len();
+        if limit >= len {
+            self.trades.clone()
+        } else {
+            self.trades[len - limit..].to_vec()
         }
     }
 
@@ -38,9 +52,8 @@ impl MatchingEngine {
                 trades
             }
             OrderType::IOC => {
-                let trades = self.match_order(&mut order);
                 // Cancel any unfilled portion (do not place on book)
-                trades
+                self.match_order(&mut order)
             }
             OrderType::FOK => {
                 // Fill or Kill: only execute if full quantity can be filled
@@ -51,18 +64,88 @@ impl MatchingEngine {
                 }
             }
             OrderType::StopLimit => {
-                // Stop-limit orders are placed on the book as limit orders
-                // once the stop price is triggered (simplified here as immediate placement)
-                let trades = self.match_order(&mut order);
-                let remaining = order.quantity - order.filled_quantity;
-                if remaining > Decimal::ZERO {
-                    self.orderbook.add_order(order);
-                }
-                trades
+                // Store stop-limit orders as pending until stop price is triggered
+                self.pending_stops.push(order);
+                return Ok(vec![]);
             }
         };
 
+        // Store trades in history
+        self.trades.extend(trades.clone());
+
+        // Check if any stop orders should be activated
+        if !trades.is_empty() {
+            let stop_trades = self.check_stop_orders();
+            self.trades.extend(stop_trades.clone());
+            let mut all_trades = trades;
+            all_trades.extend(stop_trades);
+            return Ok(all_trades);
+        }
+
         Ok(trades)
+    }
+
+    /// Cancel an order by ID, searching both the orderbook and pending stops.
+    pub fn cancel_order(&mut self, order_id: Uuid) -> Result<Order, EngineError> {
+        // Search bids side
+        if let Some(order) = self.orderbook.cancel_order(order_id, Side::Bid) {
+            return Ok(order);
+        }
+
+        // Search asks side
+        if let Some(order) = self.orderbook.cancel_order(order_id, Side::Ask) {
+            return Ok(order);
+        }
+
+        // Search pending stops
+        if let Some(pos) = self.pending_stops.iter().position(|o| o.id == order_id) {
+            let order = self.pending_stops.remove(pos);
+            return Ok(order);
+        }
+
+        Err(EngineError::OrderNotFound(order_id.to_string()))
+    }
+
+    /// Check pending stop orders against the last trade price.
+    /// Activates stop orders whose stop_price has been crossed.
+    pub fn check_stop_orders(&mut self) -> Vec<Trade> {
+        let last_trade_price = match self.trades.last() {
+            Some(trade) => trade.price,
+            None => return vec![],
+        };
+
+        let mut activated = Vec::new();
+        let mut remaining = Vec::new();
+
+        for order in self.pending_stops.drain(..) {
+            let stop_price = order.stop_price.unwrap_or(order.price);
+            let should_activate = match order.side {
+                Side::Bid => stop_price <= last_trade_price,
+                Side::Ask => stop_price >= last_trade_price,
+            };
+
+            if should_activate {
+                activated.push(order);
+            } else {
+                remaining.push(order);
+            }
+        }
+
+        self.pending_stops = remaining;
+
+        let mut all_trades = Vec::new();
+        for mut order in activated {
+            // Process as a limit order
+            order.order_type = OrderType::Limit;
+            let trades = self.match_order(&mut order);
+            let rem = order.quantity - order.filled_quantity;
+            if rem > Decimal::ZERO {
+                self.orderbook.add_order(order);
+            }
+            all_trades.extend(trades);
+        }
+
+        all_trades
     }
 
     fn match_order(&mut self, order: &mut Order) -> Vec<Trade> {
@@ -106,9 +189,16 @@ impl MatchingEngine {
             };
 
             if let Some(queue) = opposite_book.get_mut(&best_price) {
-                while !queue.is_empty()
-                    && (order.quantity - order.filled_quantity) > Decimal::ZERO
+                while !queue.is_empty() && (order.quantity - order.filled_quantity) > Decimal::ZERO
                 {
+                    let maker = queue.front().unwrap();
+
+                    // Self-trade prevention: if same user, remove maker and skip
+                    if order.user_id == maker.user_id {
+                        queue.pop_front();
+                        continue;
+                    }
+
                     let maker = queue.front_mut().unwrap();
                     let maker_remaining = maker.quantity - maker.filled_quantity;
                     let taker_remaining = order.quantity - order.filled_quantity;
@@ -152,7 +242,6 @@ impl MatchingEngine {
 
         match order.side {
             Side::Bid => {
-                // For a buy, iterate asks in ascending order (lowest price first)
                 for (price, queue) in self.orderbook.asks.iter() {
                     if *price > order.price {
                         break;
@@ -166,7 +255,6 @@ impl MatchingEngine {
                 }
             }
             Side::Ask => {
-                // For a sell, iterate bids in reverse (highest price first)
                 for (price, queue) in self.orderbook.bids.iter().rev() {
                     if *price < order.price {
                         break;
@@ -194,5 +282,225 @@ impl Order {
         } else {
             OrderStatus::PartiallyFilled
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rust_decimal_macros::dec;
+
+    fn make_order(
+        user_id: &str,
+        side: Side,
+        order_type: OrderType,
+        price: Decimal,
+        quantity: Decimal,
+    ) -> Order {
+        Order {
+            id: Uuid::new_v4(),
+            user_id: user_id.to_string(),
+            pair: "BTC/USDT".to_string(),
+            side,
+            order_type,
+            price,
+            quantity,
+            filled_quantity: Decimal::ZERO,
+            stop_price: None,
+            timestamp: 1000,
+        }
+    }
+
+    #[test]
+    fn test_basic_limit_match() {
+        let mut engine = MatchingEngine::new("BTC/USDT".to_string());
+
+        let sell = make_order("user_a", Side::Ask, OrderType::Limit, dec!(100), dec!(5));
+        let buy = make_order("user_b", Side::Bid, OrderType::Limit, dec!(100), dec!(5));
+
+        engine.process_order(sell).unwrap();
+        let trades = engine.process_order(buy).unwrap();
+
+        assert_eq!(trades.len(), 1);
+        assert_eq!(trades[0].price, dec!(100));
+        assert_eq!(trades[0].quantity, dec!(5));
+    }
+
+    #[test]
+    fn test_self_trade_prevention() {
+        let mut engine = MatchingEngine::new("BTC/USDT".to_string());
+
+        let sell = make_order("user_a", Side::Ask, OrderType::Limit, dec!(100), dec!(5));
+        let buy = make_order("user_a", Side::Bid, OrderType::Limit, dec!(100), dec!(5));
+
+        engine.process_order(sell).unwrap();
+        let trades = engine.process_order(buy).unwrap();
+
+        // No trade should be generated (same user)
+        assert!(trades.is_empty());
+    }
+
+    #[test]
+    fn test_partial_fill() {
+        let mut engine = MatchingEngine::new("BTC/USDT".to_string());
+
+        let sell = make_order("user_a", Side::Ask, OrderType::Limit, dec!(100), dec!(3));
+        let buy = make_order("user_b", Side::Bid, OrderType::Limit, dec!(100), dec!(10));
+
+        engine.process_order(sell).unwrap();
+        let trades = engine.process_order(buy).unwrap();
+
+        assert_eq!(trades.len(), 1);
+        assert_eq!(trades[0].quantity, dec!(3));
+        // Remaining 7 should be on the book
+        assert_eq!(engine.orderbook.order_count(), 1);
+    }
+
+    #[test]
+    fn test_market_order_empty_book() {
+        let mut engine = MatchingEngine::new("BTC/USDT".to_string());
+
+        let buy = make_order("user_a", Side::Bid, OrderType::Market, dec!(0), dec!(5));
+        let trades = engine.process_order(buy).unwrap();
+
+        assert!(trades.is_empty());
+    }
+
+    #[test]
+    fn test_ioc_unfilled() {
+        let mut engine = MatchingEngine::new("BTC/USDT".to_string());
+
+        // Place a small sell order
+        let sell = make_order("user_a", Side::Ask, OrderType::Limit, dec!(100), dec!(2));
+        engine.process_order(sell).unwrap();
+
+        // IOC buy for 10, only 2 available
+        let buy = make_order("user_b", Side::Bid, OrderType::IOC, dec!(100), dec!(10));
+        let trades = engine.process_order(buy).unwrap();
+
+        assert_eq!(trades.len(), 1);
+        assert_eq!(trades[0].quantity, dec!(2));
+        // Remainder is cancelled - not placed on book
+        assert_eq!(engine.orderbook.order_count(), 0);
+    }
+
+    #[test]
+    fn test_fok_rejected() {
+        let mut engine = MatchingEngine::new("BTC/USDT".to_string());
+
+        // Place a small sell order
+        let sell = make_order("user_a", Side::Ask, OrderType::Limit, dec!(100), dec!(2));
+        engine.process_order(sell).unwrap();
+
+        // FOK buy for 10, only 2 available - should be rejected
+        let buy = make_order("user_b", Side::Bid, OrderType::FOK, dec!(100), dec!(10));
+        let trades = engine.process_order(buy).unwrap();
+
+        assert!(trades.is_empty());
+        // The existing sell should still be on the book
+        assert_eq!(engine.orderbook.order_count(), 1);
+    }
+
+    #[test]
+    fn test_fok_filled() {
+        let mut engine = MatchingEngine::new("BTC/USDT".to_string());
+
+        // Place enough sell liquidity
+        let sell = make_order("user_a", Side::Ask, OrderType::Limit, dec!(100), dec!(10));
+        engine.process_order(sell).unwrap();
+
+        // FOK buy for 5 with enough liquidity
+        let buy = make_order("user_b", Side::Bid, OrderType::FOK, dec!(100), dec!(5));
+        let trades = engine.process_order(buy).unwrap();
+
+        assert_eq!(trades.len(), 1);
+        assert_eq!(trades[0].quantity, dec!(5));
+    }
+
+    #[test]
+    fn test_stop_limit_activation() {
+        let mut engine = MatchingEngine::new("BTC/USDT".to_string());
+
+        // Place a sell order on the book
+        let sell = make_order("user_a", Side::Ask, OrderType::Limit, dec!(100), dec!(5));
+        engine.process_order(sell).unwrap();
+
+        // Place a stop-limit buy that activates when price >= 100
+        let mut stop_buy = make_order(
+            "user_c",
+            Side::Bid,
+            OrderType::StopLimit,
+            dec!(105),
+            dec!(3),
+        );
+        stop_buy.stop_price = Some(dec!(100));
+        engine.process_order(stop_buy).unwrap();
+
+        // The stop order should be pending
+        assert_eq!(engine.pending_stops.len(), 1);
+
+        // Trigger a trade at price 100 by normal matching
+        let sell2 = make_order("user_a", Side::Ask, OrderType::Limit, dec!(99), dec!(2));
+        engine.process_order(sell2).unwrap();
+
+        let buy = make_order("user_b", Side::Bid, OrderType::Limit, dec!(99), dec!(2));
+        let _trades = engine.process_order(buy).unwrap();
+
+        // The trade at 99 should have activated the stop buy (stop_price 100 <= last_trade 99 is false)
+        // Actually stop_price 100 <= 99 is false, so let's adjust the test
+        // For a buy stop: activates when stop_price <= last_trade_price
+        // So we need last trade price >= 100
+
+        // Let's use a fresh engine for clarity
+        let mut engine2 = MatchingEngine::new("BTC/USDT".to_string());
+
+        // Place sell liquidity at 105
+        let sell_at_105 = make_order("user_a", Side::Ask, OrderType::Limit, dec!(105), dec!(10));
+        engine2.process_order(sell_at_105).unwrap();
+
+        // Place stop-limit buy: activates when price reaches 100, then buys at 105
+        let mut stop_buy = make_order(
+            "user_c",
+            Side::Bid,
+            OrderType::StopLimit,
+            dec!(105),
+            dec!(3),
+        );
+        stop_buy.stop_price = Some(dec!(100));
+        engine2.process_order(stop_buy).unwrap();
+        assert_eq!(engine2.pending_stops.len(), 1);
+
+        // Place a sell and a buy to generate a trade at price 100
+        let sell_at_100 = make_order("user_a", Side::Ask, OrderType::Limit, dec!(100), dec!(2));
+        engine2.process_order(sell_at_100).unwrap();
+
+        let buy_at_100 = make_order("user_b", Side::Bid, OrderType::Limit, dec!(100), dec!(2));
+        let trades = engine2.process_order(buy_at_100).unwrap();
+
+        // Trade at 100 generated, stop order with stop_price=100 should activate (100 <= 100)
+        assert!(trades.len() >= 1);
+        // The stop order should have been activated
+        assert_eq!(engine2.pending_stops.len(), 0);
+    }
+
+    #[test]
+    fn test_cancel_order() {
+        let mut engine = MatchingEngine::new("BTC/USDT".to_string());
+
+        let sell = make_order("user_a", Side::Ask, OrderType::Limit, dec!(100), dec!(5));
+        let order_id = sell.id;
+        engine.process_order(sell).unwrap();
+
+        let cancelled = engine.cancel_order(order_id).unwrap();
+        assert_eq!(cancelled.id, order_id);
+        assert_eq!(engine.orderbook.order_count(), 0);
+    }
+
+    #[test]
+    fn test_cancel_nonexistent() {
+        let mut engine = MatchingEngine::new("BTC/USDT".to_string());
+
+        let result = engine.cancel_order(Uuid::new_v4());
+        assert!(result.is_err());
     }
 }

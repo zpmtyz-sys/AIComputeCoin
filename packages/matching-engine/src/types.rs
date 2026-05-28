@@ -9,6 +9,7 @@ pub enum Side {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum OrderType {
     Limit,
     Market,
@@ -35,6 +36,7 @@ pub struct Order {
     pub price: Decimal,
     pub quantity: Decimal,
     pub filled_quantity: Decimal,
+    pub stop_price: Option<Decimal>,
     pub timestamp: u64,
 }
 

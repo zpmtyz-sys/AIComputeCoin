@@ -4,6 +4,13 @@ use rust_decimal::Decimal;
 
 use crate::types::{Order, Side};
 
+/// Aggregated order book snapshot for market data feeds.
+#[derive(Debug, Clone)]
+pub struct OrderBookSnapshot {
+    pub bids: Vec<(Decimal, Decimal, usize)>,
+    pub asks: Vec<(Decimal, Decimal, usize)>,
+}
+
 /// Order book maintaining price-time priority for bids and asks.
 pub struct OrderBook {
     pub bids: BTreeMap<Decimal, VecDeque<Order>>,
@@ -34,12 +41,25 @@ impl OrderBook {
             Side::Ask => &mut self.asks,
         };
 
-        for (_price, orders) in book.iter_mut() {
+        let mut found_price = None;
+        let mut found_order = None;
+
+        for (price, orders) in book.iter_mut() {
             if let Some(pos) = orders.iter().position(|o| o.id == order_id) {
-                return orders.remove(pos);
+                found_order = orders.remove(pos);
+                if orders.is_empty() {
+                    found_price = Some(*price);
+                }
+                break;
             }
         }
-        None
+
+        // Remove empty price level
+        if let Some(price) = found_price {
+            book.remove(&price);
+        }
+
+        found_order
     }
 
     pub fn best_bid(&self) -> Option<Decimal> {
@@ -50,6 +70,7 @@ impl OrderBook {
         self.asks.keys().next().copied()
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn depth(&self, levels: usize) -> (Vec<(Decimal, Decimal)>, Vec<(Decimal, Decimal)>) {
         let bids: Vec<(Decimal, Decimal)> = self
             .bids
@@ -57,7 +78,8 @@ impl OrderBook {
             .rev()
             .take(levels)
             .map(|(price, orders)| {
-                let total_qty: Decimal = orders.iter().map(|o| o.quantity - o.filled_quantity).sum();
+                let total_qty: Decimal =
+                    orders.iter().map(|o| o.quantity - o.filled_quantity).sum();
                 (*price, total_qty)
             })
             .collect();
@@ -67,11 +89,45 @@ impl OrderBook {
             .iter()
             .take(levels)
             .map(|(price, orders)| {
-                let total_qty: Decimal = orders.iter().map(|o| o.quantity - o.filled_quantity).sum();
+                let total_qty: Decimal =
+                    orders.iter().map(|o| o.quantity - o.filled_quantity).sum();
                 (*price, total_qty)
             })
             .collect();
 
         (bids, asks)
+    }
+
+    /// Returns an aggregated snapshot of the order book with (price, total_quantity, order_count) tuples.
+    pub fn snapshot(&self) -> OrderBookSnapshot {
+        let bids: Vec<(Decimal, Decimal, usize)> = self
+            .bids
+            .iter()
+            .rev()
+            .map(|(price, orders)| {
+                let total_qty: Decimal =
+                    orders.iter().map(|o| o.quantity - o.filled_quantity).sum();
+                (*price, total_qty, orders.len())
+            })
+            .collect();
+
+        let asks: Vec<(Decimal, Decimal, usize)> = self
+            .asks
+            .iter()
+            .map(|(price, orders)| {
+                let total_qty: Decimal =
+                    orders.iter().map(|o| o.quantity - o.filled_quantity).sum();
+                (*price, total_qty, orders.len())
+            })
+            .collect();
+
+        OrderBookSnapshot { bids, asks }
+    }
+
+    /// Returns the total number of orders across both sides.
+    pub fn order_count(&self) -> usize {
+        let bid_count: usize = self.bids.values().map(|q| q.len()).sum();
+        let ask_count: usize = self.asks.values().map(|q| q.len()).sum();
+        bid_count + ask_count
     }
 }
