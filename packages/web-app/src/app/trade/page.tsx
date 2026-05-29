@@ -1,55 +1,68 @@
+"use client";
+
+import { useState } from "react";
+import TradingChart from "@/components/chart/TradingChart";
+import OrderBook from "@/components/orderbook/OrderBook";
+import OrderForm from "@/components/order-form/OrderForm";
+import PositionsTable from "@/components/portfolio/PositionsTable";
+import OrdersTable from "@/components/portfolio/OrdersTable";
+
 export default function TradePage() {
+  const [activeTab, setActiveTab] = useState<"positions" | "orders" | "history">(
+    "positions"
+  );
+  const [orderPrice, setOrderPrice] = useState<number | undefined>(undefined);
+
+  const handlePriceClick = (price: number) => {
+    setOrderPrice(price);
+  };
+
   return (
-    <main className="min-h-screen p-4">
-      <div className="grid grid-cols-12 gap-4 h-[calc(100vh-2rem)]">
+    <div className="p-4 h-[calc(100vh-3.5rem)]">
+      <div className="grid grid-cols-12 gap-3 h-full">
         {/* Chart Section */}
-        <div className="col-span-8 row-span-2 rounded-lg bg-[var(--card-bg)] border border-[var(--border)] p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">CU-PERP/USDT</h2>
-            <div className="flex gap-2 text-sm text-gray-400">
-              <span>1m</span>
-              <span>5m</span>
-              <span>15m</span>
-              <span>1h</span>
-              <span>4h</span>
-              <span>1D</span>
-            </div>
-          </div>
-          <div className="flex items-center justify-center h-[calc(100%-3rem)] text-gray-500">
-            Chart placeholder - TradingView Lightweight Charts
-          </div>
+        <div className="col-span-12 lg:col-span-8 row-span-2 rounded-lg bg-card-bg border border-border p-3 min-h-[400px]">
+          <TradingChart />
         </div>
 
         {/* Order Book */}
-        <div className="col-span-4 rounded-lg bg-[var(--card-bg)] border border-[var(--border)] p-4">
-          <h2 className="text-lg font-semibold mb-4">Order Book</h2>
-          <div className="flex items-center justify-center h-[calc(100%-3rem)] text-gray-500">
-            Order book placeholder
-          </div>
+        <div className="col-span-12 sm:col-span-6 lg:col-span-4 rounded-lg bg-card-bg border border-border p-3 min-h-[300px] lg:min-h-0">
+          <OrderBook onPriceClick={handlePriceClick} />
         </div>
 
         {/* Order Entry */}
-        <div className="col-span-4 rounded-lg bg-[var(--card-bg)] border border-[var(--border)] p-4">
-          <h2 className="text-lg font-semibold mb-4">Place Order</h2>
-          <div className="flex items-center justify-center h-[calc(100%-3rem)] text-gray-500">
-            Order entry form placeholder
-          </div>
+        <div className="col-span-12 sm:col-span-6 lg:col-span-4 rounded-lg bg-card-bg border border-border p-3 min-h-[300px] lg:min-h-0">
+          <OrderForm initialPrice={orderPrice} />
         </div>
 
         {/* Positions / Orders */}
-        <div className="col-span-12 rounded-lg bg-[var(--card-bg)] border border-[var(--border)] p-4">
-          <div className="flex gap-4 mb-4">
-            <button className="text-sm font-semibold text-compute-blue-400">
+        <div className="col-span-12 rounded-lg bg-card-bg border border-border p-3">
+          <div className="flex gap-4 mb-3 border-b border-border pb-2">
+            <button
+              onClick={() => setActiveTab("positions")}
+              className={`text-sm font-medium transition-colors ${
+                activeTab === "positions"
+                  ? "text-accent"
+                  : "text-gray-400 hover:text-foreground"
+              }`}
+            >
               Open Positions
             </button>
-            <button className="text-sm text-gray-400">Open Orders</button>
-            <button className="text-sm text-gray-400">Trade History</button>
+            <button
+              onClick={() => setActiveTab("orders")}
+              className={`text-sm font-medium transition-colors ${
+                activeTab === "orders"
+                  ? "text-accent"
+                  : "text-gray-400 hover:text-foreground"
+              }`}
+            >
+              Open Orders
+            </button>
           </div>
-          <div className="flex items-center justify-center h-32 text-gray-500">
-            Positions table placeholder
-          </div>
+          {activeTab === "positions" && <PositionsTable />}
+          {activeTab === "orders" && <OrdersTable />}
         </div>
       </div>
-    </main>
+    </div>
   );
 }

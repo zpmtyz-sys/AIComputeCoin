@@ -9,6 +9,14 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        background: "var(--background)",
+        foreground: "var(--foreground)",
+        "card-bg": "var(--card-bg)",
+        "card-bg-hover": "var(--card-bg-hover)",
+        border: "var(--border)",
+        positive: "var(--positive)",
+        negative: "var(--negative)",
+        accent: "var(--accent)",
         "compute-blue": {
           50: "#eff6ff",
           100: "#dbeafe",
@@ -32,6 +40,20 @@ const config: Config = {
           700: "#15803d",
           800: "#166534",
           900: "#14532d",
+        },
+      },
+      fontFamily: {
+        sans: ["var(--font-inter)", "Inter", "system-ui", "sans-serif"],
+        mono: ["var(--font-jetbrains)", "JetBrains Mono", "Menlo", "monospace"],
+      },
+      animation: {
+        "pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+        "fade-in": "fadeIn 0.2s ease-in-out",
+      },
+      keyframes: {
+        fadeIn: {
+          "0%": { opacity: "0" },
+          "100%": { opacity: "1" },
         },
       },
     },
