@@ -31,6 +31,7 @@ type FundingResult struct {
 type SettlementResult struct {
 	ProcessedPositions int
 	TotalFunding       decimal.Decimal
+	SocializedLoss     decimal.Decimal
 	SettledAt          time.Time
 }
 
@@ -158,7 +159,10 @@ func (e *SettlementEngine) ProcessSettlement(positions []*model.TradingPosition,
 				if funding.IsPositive() {
 					_ = bal.Credit(funding)
 				} else {
-					_ = bal.Debit(funding.Abs())
+					if err := bal.Debit(funding.Abs()); err != nil {
+						// User cannot cover funding payment; track as socialized loss
+						result.SocializedLoss = result.SocializedLoss.Add(funding.Abs())
+					}
 				}
 			}
 

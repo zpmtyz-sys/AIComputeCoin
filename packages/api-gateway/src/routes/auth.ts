@@ -25,7 +25,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
         { userId: user.id, email: user.email, role: user.role },
         { expiresIn: config.accessTokenExpiry }
       );
-      const refreshToken = app.jwt.sign(
+      const refreshToken = app.jwt.refresh.sign(
         { userId: user.id, email: user.email, role: user.role, type: "refresh" },
         { expiresIn: config.refreshTokenExpiry }
       );
@@ -70,7 +70,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       { userId: user.id, email: user.email, role: user.role },
       { expiresIn: config.accessTokenExpiry }
     );
-    const refreshToken = app.jwt.sign(
+    const refreshToken = app.jwt.refresh.sign(
       { userId: user.id, email: user.email, role: user.role, type: "refresh" },
       { expiresIn: config.refreshTokenExpiry }
     );
@@ -97,7 +97,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     const { refreshToken } = parsed.data;
 
     try {
-      const decoded = app.jwt.verify<{
+      const decoded = app.jwt.refresh.verify<{
         userId: string;
         email: string;
         role: string;

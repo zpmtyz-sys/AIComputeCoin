@@ -24,13 +24,30 @@ declare module "@fastify/jwt" {
     payload: JwtPayload;
     user: JwtPayload;
   }
+
+  interface JWT {
+    refresh: {
+      sign(payload: object, options?: object): string;
+      verify<Decoded extends object>(token: string, options?: object): Decoded;
+    };
+  }
 }
 
 async function jwtPlugin(app: FastifyInstance): Promise<void> {
+  // Register primary JWT for access tokens
   await app.register(fastifyJwt, {
     secret: config.jwtSecret,
     sign: {
       expiresIn: config.accessTokenExpiry,
+    },
+  });
+
+  // Register a second JWT instance for refresh tokens with a separate secret
+  await app.register(fastifyJwt, {
+    secret: config.jwtRefreshSecret,
+    namespace: "refresh",
+    sign: {
+      expiresIn: config.refreshTokenExpiry,
     },
   });
 

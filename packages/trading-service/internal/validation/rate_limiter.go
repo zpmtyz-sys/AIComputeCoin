@@ -15,6 +15,7 @@ const (
 
 // tokenBucket implements a token bucket rate limiter for a single user.
 type tokenBucket struct {
+	mu         sync.Mutex
 	tokens     float64
 	maxTokens  float64
 	refillRate float64 // tokens per second
@@ -23,7 +24,6 @@ type tokenBucket struct {
 
 // RateLimiter provides per-user rate limiting using token bucket algorithm.
 type RateLimiter struct {
-	mu      sync.Mutex
 	buckets sync.Map // userID -> *tokenBucket
 	rates   map[Tier]float64
 	now     func() time.Time // injectable clock for testing
@@ -57,8 +57,8 @@ func (rl *RateLimiter) Allow(userID string, tier Tier) bool {
 
 	bucket := val.(*tokenBucket)
 
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
+	bucket.mu.Lock()
+	defer bucket.mu.Unlock()
 
 	// Refill tokens based on elapsed time
 	elapsed := now.Sub(bucket.lastRefill).Seconds()
