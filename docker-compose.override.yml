@@ -1,0 +1,29 @@
+version: "3.8"
+
+# Local development overrides - hot reload via volume mounts
+services:
+  api-gateway:
+    volumes:
+      - ./packages/api-gateway/src:/app/src
+    environment:
+      NODE_ENV: development
+
+  web-app:
+    volumes:
+      - ./packages/web-app/src:/app/src
+      - ./packages/web-app/public:/app/public
+    environment:
+      NODE_ENV: development
+      WATCHPACK_POLLING: "true"
+
+  trading-service:
+    volumes:
+      - ./packages/trading-service:/app
+    environment:
+      GO_ENV: development
+
+  oracle-service:
+    volumes:
+      - ./packages/oracle-service:/app
+    environment:
+      GO_ENV: development

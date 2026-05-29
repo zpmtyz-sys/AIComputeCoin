@@ -1,0 +1,38 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-blockchain
+  labels:
+    app: blockchain
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector:
+    matchLabels:
+      app: blockchain
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: oracle-service
+      ports:
+        - protocol: TCP
+          port: 26657
+    - from:
+        - podSelector:
+            matchLabels:
+              app: blockchain
+      ports:
+        - protocol: TCP
+          port: 26656
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: blockchain
+      ports:
+        - protocol: TCP
+          port: 26656

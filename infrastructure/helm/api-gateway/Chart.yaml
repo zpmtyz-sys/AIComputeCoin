@@ -1,0 +1,13 @@
+apiVersion: v2
+name: api-gateway
+description: ComputeCoin API Gateway - RESTful and WebSocket API
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - api
+  - gateway
+  - rest
+  - websocket
+maintainers:
+  - name: ComputeCoin Team

@@ -1,0 +1,95 @@
+groups:
+  - name: matching_engine_alerts
+    rules:
+      - alert: HighMatchingLatency
+        expr: histogram_quantile(0.99, rate(matching_engine_order_match_duration_seconds_bucket[5m])) > 0.001
+        for: 5m
+        labels:
+          severity: critical
+          service: matching-engine
+        annotations:
+          summary: "High matching latency detected"
+          description: "P99 matching latency is {{ $value }}s, exceeding 1ms threshold for 5 minutes."
+
+      - alert: SlowOrderProcessing
+        expr: histogram_quantile(0.95, rate(matching_engine_order_processing_duration_seconds_bucket[5m])) > 0.01
+        for: 3m
+        labels:
+          severity: warning
+          service: matching-engine
+        annotations:
+          summary: "Slow order processing"
+          description: "P95 order processing time is {{ $value }}s, exceeding 10ms threshold."
+
+  - name: api_gateway_alerts
+    rules:
+      - alert: HighAPIErrorRate
+        expr: sum(rate(http_requests_total{status=~"5.."}[2m])) / sum(rate(http_requests_total[2m])) > 0.01
+        for: 2m
+        labels:
+          severity: critical
+          service: api-gateway
+        annotations:
+          summary: "High API error rate"
+          description: "API error rate is {{ $value | humanizePercentage }}, exceeding 1% threshold."
+
+      - alert: HighAPILatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="api-gateway"}[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          service: api-gateway
+        annotations:
+          summary: "High API latency"
+          description: "P95 API latency is {{ $value }}s, exceeding 500ms threshold."
+
+  - name: service_health_alerts
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "{{ $labels.job }} has been unreachable for more than 30 seconds."
+
+      - alert: HighMemoryUsage
+        expr: process_resident_memory_bytes / 1024 / 1024 / 1024 > 0.9 * on(job) group_left() (label_replace(vector(4), "job", "matching-engine", "", "") or label_replace(vector(1), "job", "api-gateway", "", "") or label_replace(vector(2), "job", "trading-service", "", ""))
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.job }}"
+          description: "Memory usage is above 90% of allocated limit."
+
+      - alert: HighDiskUsage
+        expr: (node_filesystem_size_bytes - node_filesystem_free_bytes) / node_filesystem_size_bytes > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High disk usage"
+          description: "Disk usage is above 80% on {{ $labels.instance }}."
+
+  - name: trading_alerts
+    rules:
+      - alert: OrderQueueBacklog
+        expr: matching_engine_order_queue_length > 10000
+        for: 1m
+        labels:
+          severity: warning
+          service: matching-engine
+        annotations:
+          summary: "Order queue backlog detected"
+          description: "Order queue length is {{ $value }}, indicating processing delays."
+
+      - alert: HighOrderRejectionRate
+        expr: rate(orders_rejected_total[5m]) / rate(orders_submitted_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: trading-service
+        annotations:
+          summary: "High order rejection rate"
+          description: "Order rejection rate is {{ $value | humanizePercentage }}."

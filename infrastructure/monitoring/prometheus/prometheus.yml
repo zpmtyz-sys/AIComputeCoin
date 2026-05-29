@@ -1,0 +1,46 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+rule_files:
+  - "alerts.yml"
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'matching-engine'
+    static_configs:
+      - targets: ['matching-engine:50051']
+    metrics_path: /metrics
+    scrape_interval: 5s
+
+  - job_name: 'api-gateway'
+    static_configs:
+      - targets: ['api-gateway:3000']
+    metrics_path: /metrics
+
+  - job_name: 'trading-service'
+    static_configs:
+      - targets: ['trading-service:50052']
+    metrics_path: /metrics
+    scrape_interval: 5s
+
+  - job_name: 'oracle-service'
+    static_configs:
+      - targets: ['oracle-service:50053']
+    metrics_path: /metrics
+
+  - job_name: 'blockchain'
+    static_configs:
+      - targets: ['blockchain:26657']
+    metrics_path: /metrics
+    scrape_interval: 10s

@@ -1,0 +1,56 @@
+replicaCount: 2
+
+image:
+  repository: computecoin/trading-service
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 50052
+  protocol: TCP
+
+resources:
+  requests:
+    cpu: "500m"
+    memory: "1Gi"
+  limits:
+    cpu: "1000m"
+    memory: "2Gi"
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  minAvailable: 1
+
+env:
+  PORT: "50052"
+  DATABASE_URL: ""
+  KAFKA_BROKERS: ""
+  MATCHING_ENGINE_URL: ""
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+
+livenessProbe:
+  grpc:
+    port: 50052
+  initialDelaySeconds: 10
+  periodSeconds: 10
+
+readinessProbe:
+  grpc:
+    port: 50052
+  initialDelaySeconds: 5
+  periodSeconds: 5
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
