@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"os"
 	"os/signal"
@@ -18,11 +18,17 @@ import (
 )
 
 func main() {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	slog.SetDefault(logger)
+
 	cfg := config.NewConfig()
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", cfg.Port))
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		logger.Error("failed to listen", "error", err, "port", cfg.Port)
+		os.Exit(1)
 	}
 
 	grpcServer := grpc.NewServer()
@@ -31,29 +37,32 @@ func main() {
 	healthServer := health.NewServer()
 	grpc_health_v1.RegisterHealthServer(grpcServer, healthServer)
 
-	// Register oracle service
-	oracleSvc := service.NewOracleService(cfg)
-	_ = oracleSvc // Will register with gRPC once proto is generated
+	// Create oracle service
+	oracleSvc := service.NewOracleService(cfg, logger)
 
-	log.Printf("Oracle service listening on port %s", cfg.Port)
-
-	// Graceful shutdown
+	// Start heartbeat
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	oracleSvc.StartHeartbeat(ctx)
 
+	_ = oracleSvc // Will register with gRPC once proto is generated
+
+	logger.Info("oracle service listening", "port", cfg.Port)
+
+	// Graceful shutdown
 	go func() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
 		<-sigCh
-		log.Println("Received shutdown signal, stopping gracefully...")
+		logger.Info("received shutdown signal, stopping gracefully")
 		grpcServer.GracefulStop()
 		cancel()
 	}()
 
 	if err := grpcServer.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
+		logger.Error("failed to serve", "error", err)
+		os.Exit(1)
 	}
 
-	<-ctx.Done()
-	log.Println("Oracle service stopped.")
+	logger.Info("oracle service stopped")
 }
