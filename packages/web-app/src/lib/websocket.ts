@@ -20,7 +20,10 @@ class WebSocketManager {
     this.url = url;
   }
 
-  static getInstance(url?: string): WebSocketManager {
+  static getInstance(url?: string): WebSocketManager | null {
+    // Guard against SSR: WebSocket is not available on the server
+    if (typeof window === "undefined") return null;
+
     if (!WebSocketManager.instance) {
       WebSocketManager.instance = new WebSocketManager(
         url ?? process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8080/ws"

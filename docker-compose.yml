@@ -150,8 +150,10 @@ services:
     ports:
       - "8080:3000"
     environment:
-      NEXT_PUBLIC_API_URL: http://api-gateway:3000
-      NEXT_PUBLIC_WS_URL: ws://api-gateway:3000/ws
+      # These URLs are resolved by the browser, not the container.
+      # For local development, the api-gateway exposes port 3000 on the host.
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+      NEXT_PUBLIC_WS_URL: ws://localhost:3000/ws
     depends_on:
       api-gateway:
         condition: service_started

@@ -1,6 +1,11 @@
-// API Client with configurable base URL and mock data
+// API Client with configurable base URL and mock data fallback
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api/v1";
+
+// Mock mode: enabled explicitly via env var, or implicitly in development
+const MOCK_MODE =
+  process.env.NEXT_PUBLIC_MOCK_MODE === "true" ||
+  process.env.NODE_ENV === "development";
 
 // Types
 export interface Kline {
@@ -156,40 +161,46 @@ async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> 
 export async function getKlines(pair: string, interval: string): Promise<Kline[]> {
   try {
     return await apiFetch<Kline[]>(`/klines?pair=${pair}&interval=${interval}`);
-  } catch {
-    return mockKlines(200);
+  } catch (error) {
+    if (MOCK_MODE) return mockKlines(200);
+    throw error;
   }
 }
 
 export async function getOrderbook(pair: string): Promise<OrderBookData> {
   try {
     return await apiFetch<OrderBookData>(`/orderbook?pair=${pair}`);
-  } catch {
-    return mockOrderbook();
+  } catch (error) {
+    if (MOCK_MODE) return mockOrderbook();
+    throw error;
   }
 }
 
 export async function getTicker(pair: string): Promise<Ticker> {
   try {
     return await apiFetch<Ticker>(`/ticker?pair=${pair}`);
-  } catch {
-    return {
-      pair,
-      lastPrice: 45023.5,
-      change24h: 523.5,
-      changePct24h: 1.18,
-      high24h: 45500,
-      low24h: 44200,
-      volume24h: 125430000,
-    };
+  } catch (error) {
+    if (MOCK_MODE) {
+      return {
+        pair,
+        lastPrice: 45023.5,
+        change24h: 523.5,
+        changePct24h: 1.18,
+        high24h: 45500,
+        low24h: 44200,
+        volume24h: 125430000,
+      };
+    }
+    throw error;
   }
 }
 
 export async function getMarkets(): Promise<Market[]> {
   try {
     return await apiFetch<Market[]>("/markets");
-  } catch {
-    return mockMarkets();
+  } catch (error) {
+    if (MOCK_MODE) return mockMarkets();
+    throw error;
   }
 }
 
@@ -199,8 +210,11 @@ export async function submitOrder(order: OrderSubmission): Promise<OrderResponse
       method: "POST",
       body: JSON.stringify(order),
     });
-  } catch {
-    return { id: `ord-${Date.now()}`, status: "accepted", message: "Order placed" };
+  } catch (error) {
+    if (MOCK_MODE) {
+      return { id: `ord-${Date.now()}`, status: "accepted", message: "Order placed" };
+    }
+    throw error;
   }
 }
 
@@ -209,40 +223,50 @@ export async function cancelOrder(id: string): Promise<{ success: boolean }> {
     return await apiFetch<{ success: boolean }>(`/orders/${id}`, {
       method: "DELETE",
     });
-  } catch {
-    return { success: true };
+  } catch (error) {
+    if (MOCK_MODE) return { success: true };
+    throw error;
   }
 }
 
 export async function getPositions(): Promise<Position[]> {
   try {
     return await apiFetch<Position[]>("/positions");
-  } catch {
-    return [
-      { id: "1", pair: "CU-PERP/USDT", side: "long", size: 2.5, entryPrice: 44800, markPrice: 45050, unrealizedPnl: 625, margin: 11200 },
-      { id: "2", pair: "GPU-SPOT/USDT", side: "short", size: 1.2, entryPrice: 12500, markPrice: 12650, unrealizedPnl: -180, margin: 3000 },
-    ];
+  } catch (error) {
+    if (MOCK_MODE) {
+      return [
+        { id: "1", pair: "CU-PERP/USDT", side: "long", size: 2.5, entryPrice: 44800, markPrice: 45050, unrealizedPnl: 625, margin: 11200 },
+        { id: "2", pair: "GPU-SPOT/USDT", side: "short", size: 1.2, entryPrice: 12500, markPrice: 12650, unrealizedPnl: -180, margin: 3000 },
+      ];
+    }
+    throw error;
   }
 }
 
 export async function getOrders(): Promise<Order[]> {
   try {
     return await apiFetch<Order[]>("/orders");
-  } catch {
-    return [
-      { id: "ord-001", pair: "CU-PERP/USDT", side: "buy", type: "limit", price: 44500, quantity: 1.5, filled: 0, time: "2024-01-15 14:30:22", status: "open" },
-      { id: "ord-002", pair: "GPU-SPOT/USDT", side: "sell", type: "limit", price: 12800, quantity: 3.0, filled: 50, time: "2024-01-15 13:15:08", status: "partial" },
-    ];
+  } catch (error) {
+    if (MOCK_MODE) {
+      return [
+        { id: "ord-001", pair: "CU-PERP/USDT", side: "buy", type: "limit", price: 44500, quantity: 1.5, filled: 0, time: "2024-01-15 14:30:22", status: "open" },
+        { id: "ord-002", pair: "GPU-SPOT/USDT", side: "sell", type: "limit", price: 12800, quantity: 3.0, filled: 50, time: "2024-01-15 13:15:08", status: "partial" },
+      ];
+    }
+    throw error;
   }
 }
 
 export async function getTradeHistory(): Promise<TradeRecord[]> {
   try {
     return await apiFetch<TradeRecord[]>("/trades/history");
-  } catch {
-    return [
-      { id: "t1", time: "2024-01-15 14:22:10", pair: "CU-PERP/USDT", side: "sell", price: 45100, quantity: 1.0, fee: 6.77, realizedPnl: 320.5 },
-      { id: "t2", time: "2024-01-15 12:10:45", pair: "CU-PERP/USDT", side: "buy", price: 44780, quantity: 1.0, fee: 4.48, realizedPnl: 0 },
-    ];
+  } catch (error) {
+    if (MOCK_MODE) {
+      return [
+        { id: "t1", time: "2024-01-15 14:22:10", pair: "CU-PERP/USDT", side: "sell", price: 45100, quantity: 1.0, fee: 6.77, realizedPnl: 320.5 },
+        { id: "t2", time: "2024-01-15 12:10:45", pair: "CU-PERP/USDT", side: "buy", price: 44780, quantity: 1.0, fee: 4.48, realizedPnl: 0 },
+      ];
+    }
+    throw error;
   }
 }

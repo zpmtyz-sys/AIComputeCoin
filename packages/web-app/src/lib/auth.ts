@@ -28,6 +28,17 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Token stored in memory (simulating httpOnly cookie pattern)
+// Guarded for SSR: only access on the client side to prevent leaking across requests
+function getToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return accessToken;
+}
+
+function setToken(token: string | null): void {
+  if (typeof window === "undefined") return;
+  accessToken = token;
+}
+
 let accessToken: string | null = null;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -38,7 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Auto-check auth on mount
     const checkAuth = async () => {
       try {
-        if (accessToken) {
+        if (getToken()) {
           setUser({
             id: "user-1",
             email: "trader@computecoin.io",
@@ -55,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, _password: string) => {
     // Simulated login - in production this calls the API
     await new Promise((resolve) => setTimeout(resolve, 500));
-    accessToken = "mock-jwt-token";
+    setToken("mock-jwt-token");
     setUser({
       id: "user-1",
       email,
@@ -66,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = useCallback(async (email: string, _password: string) => {
     // Simulated registration
     await new Promise((resolve) => setTimeout(resolve, 500));
-    accessToken = "mock-jwt-token";
+    setToken("mock-jwt-token");
     setUser({
       id: "user-1",
       email,
@@ -75,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    accessToken = null;
+    setToken(null);
     setUser(null);
   }, []);
 

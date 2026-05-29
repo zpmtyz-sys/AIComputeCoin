@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { z } from "zod";
 import ConfirmationModal from "./ConfirmationModal";
+import { submitOrder as apiSubmitOrder, type OrderSubmission } from "@/lib/api";
 
 type OrderType = "limit" | "market" | "stop-limit";
 type OrderSide = "buy" | "sell";
@@ -39,6 +40,8 @@ export default function OrderForm({ initialPrice }: OrderFormProps) {
   const [limitPrice, setLimitPrice] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const total = parseFloat(price || "0") * parseFloat(quantity || "0");
   const fee = total * (orderType === "market" ? TAKER_FEE : MAKER_FEE);
@@ -94,10 +97,35 @@ export default function OrderForm({ initialPrice }: OrderFormProps) {
     submitOrder();
   };
 
-  const submitOrder = () => {
+  const submitOrder = async () => {
     setShowConfirmation(false);
-    // In production this would call the API
-    setQuantity("");
+    setStatusMessage(null);
+    setIsSubmitting(true);
+
+    try {
+      const orderPayload: OrderSubmission = {
+        pair: "CU-PERP/USDT",
+        side,
+        type: orderType,
+        quantity: parseFloat(quantity),
+      };
+
+      if (orderType === "limit") {
+        orderPayload.price = parseFloat(price);
+      } else if (orderType === "stop-limit") {
+        orderPayload.price = parseFloat(limitPrice);
+        orderPayload.stopPrice = parseFloat(stopPrice);
+      }
+
+      const response = await apiSubmitOrder(orderPayload);
+      setStatusMessage({ type: "success", text: response.message });
+      setQuantity("");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Order submission failed";
+      setStatusMessage({ type: "error", text: message });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -239,16 +267,30 @@ export default function OrderForm({ initialPrice }: OrderFormProps) {
         </div>
       </div>
 
+      {/* Status message */}
+      {statusMessage && (
+        <div
+          className={`mt-2 px-3 py-2 rounded-md text-xs ${
+            statusMessage.type === "success"
+              ? "bg-positive/10 text-positive"
+              : "bg-negative/10 text-negative"
+          }`}
+        >
+          {statusMessage.text}
+        </div>
+      )}
+
       {/* Submit */}
       <button
         onClick={validateAndSubmit}
-        className={`w-full py-3 mt-3 rounded-md text-sm font-semibold transition-colors ${
+        disabled={isSubmitting}
+        className={`w-full py-3 mt-3 rounded-md text-sm font-semibold transition-colors disabled:opacity-50 ${
           side === "buy"
             ? "bg-positive hover:bg-positive/90 text-white"
             : "bg-negative hover:bg-negative/90 text-white"
         }`}
       >
-        {side === "buy" ? "Buy" : "Sell"} CU-PERP
+        {isSubmitting ? "Submitting..." : side === "buy" ? "Buy" : "Sell"} CU-PERP
       </button>
 
       {showConfirmation && (

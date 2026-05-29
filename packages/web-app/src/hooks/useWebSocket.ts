@@ -18,6 +18,10 @@ export function useWebSocket<T = unknown>(channel: string): UseWebSocketResult<T
   useEffect(() => {
     try {
       const manager = WebSocketManager.getInstance();
+      if (!manager) {
+        // Server-side or unsupported environment; no-op
+        return;
+      }
       managerRef.current = manager;
       setIsConnected(manager.isConnected);
 

@@ -17,6 +17,11 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
+  # NOTE: Each service below must expose a /metrics endpoint for scraping to work.
+  # Services need to implement Prometheus metrics exporters (e.g., prom-client for Node.js,
+  # prometheus crate for Rust, prometheus/client_golang for Go).
+  # Until metrics endpoints are implemented, these targets will show as DOWN in Prometheus.
+
   - job_name: 'matching-engine'
     static_configs:
       - targets: ['matching-engine:50051']
