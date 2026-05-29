@@ -1,0 +1,26 @@
+{
+  "id": "FEAT-004",
+  "type": "fix",
+  "description": "Address v2 code review issues: non-deterministic staking dust, Dockerfile build context escape, CI web-app test failure, CI pnpm workspace install",
+  "status": "in_progress",
+  "steps": [
+    "Replace HashMap with BTreeMap in staking.rs and add Ord/PartialOrd derives to Address in types.rs",
+    "Fix docker-compose.yml to use repo root context for matching-engine and update Dockerfile COPY paths",
+    "Add test script to packages/web-app/package.json",
+    "Fix CI node-check job to install from root and use --filter for package-specific commands"
+  ],
+  "acceptance_criteria": [
+    "cargo check passes for packages/blockchain",
+    "docker-compose.yml uses context: . for matching-engine service",
+    "packages/web-app/package.json has a test script",
+    "CI node-check job uses pnpm --filter for package commands and installs from repo root"
+  ],
+  "verification": [
+    "Run 'cargo check' in packages/blockchain/",
+    "Inspect docker-compose.yml matching-engine build context",
+    "Verify web-app package.json has test script",
+    "Verify CI yaml node-check job structure"
+  ],
+  "blocked_reason": null,
+  "findings": null
+}

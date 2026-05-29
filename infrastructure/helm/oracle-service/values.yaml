@@ -1,0 +1,54 @@
+replicaCount: 2
+
+image:
+  repository: computecoin/oracle-service
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 50053
+  protocol: TCP
+
+resources:
+  requests:
+    cpu: "250m"
+    memory: "512Mi"
+  limits:
+    cpu: "500m"
+    memory: "1Gi"
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  minAvailable: 1
+
+env:
+  PORT: "50053"
+  CHAIN_RPC_URL: ""
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+
+livenessProbe:
+  grpc:
+    port: 50053
+  initialDelaySeconds: 10
+  periodSeconds: 10
+
+readinessProbe:
+  grpc:
+    port: 50053
+  initialDelaySeconds: 5
+  periodSeconds: 5
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

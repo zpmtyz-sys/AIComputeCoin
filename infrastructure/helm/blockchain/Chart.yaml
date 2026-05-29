@@ -1,0 +1,12 @@
+apiVersion: v2
+name: blockchain
+description: ComputeCoin Blockchain Node - Consensus and state management
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - blockchain
+  - consensus
+  - validator
+maintainers:
+  - name: ComputeCoin Team

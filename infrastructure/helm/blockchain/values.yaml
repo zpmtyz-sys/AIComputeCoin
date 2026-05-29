@@ -1,0 +1,58 @@
+replicaCount: 3
+
+image:
+  repository: computecoin/blockchain
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  rpcPort: 26657
+  p2pPort: 26656
+
+resources:
+  requests:
+    cpu: "1000m"
+    memory: "2Gi"
+  limits:
+    cpu: "2000m"
+    memory: "4Gi"
+
+autoscaling:
+  enabled: false
+
+podDisruptionBudget:
+  maxUnavailable: 1
+
+persistence:
+  storageClass: standard
+  size: 100Gi
+
+env:
+  RUST_LOG: info
+  CHAIN_ID: computecoin-testnet-1
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+  readOnlyRootFilesystem: false
+  allowPrivilegeEscalation: false
+
+livenessProbe:
+  httpGet:
+    path: /status
+    port: 26657
+  initialDelaySeconds: 30
+  periodSeconds: 10
+
+readinessProbe:
+  httpGet:
+    path: /status
+    port: 26657
+  initialDelaySeconds: 15
+  periodSeconds: 5
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

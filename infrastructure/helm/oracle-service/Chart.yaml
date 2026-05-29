@@ -1,0 +1,12 @@
+apiVersion: v2
+name: oracle-service
+description: ComputeCoin Oracle Service - Price feeds and on-chain data
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - oracle
+  - price-feed
+  - blockchain
+maintainers:
+  - name: ComputeCoin Team

@@ -1,0 +1,12 @@
+apiVersion: v2
+name: trading-service
+description: ComputeCoin Trading Service - Order management and position tracking
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - trading
+  - orders
+  - positions
+maintainers:
+  - name: ComputeCoin Team

@@ -1,0 +1,189 @@
+{
+  "id": null,
+  "uid": "system-health",
+  "title": "System Health",
+  "tags": ["system", "computecoin"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "CPU Usage per Service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "rate(process_cpu_seconds_total{job=\"matching-engine\"}[5m]) * 100",
+          "legendFormat": "matching-engine",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(process_cpu_seconds_total{job=\"api-gateway\"}[5m]) * 100",
+          "legendFormat": "api-gateway",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(process_cpu_seconds_total{job=\"trading-service\"}[5m]) * 100",
+          "legendFormat": "trading-service",
+          "refId": "C"
+        },
+        {
+          "expr": "rate(process_cpu_seconds_total{job=\"oracle-service\"}[5m]) * 100",
+          "legendFormat": "oracle-service",
+          "refId": "D"
+        },
+        {
+          "expr": "rate(process_cpu_seconds_total{job=\"blockchain\"}[5m]) * 100",
+          "legendFormat": "blockchain",
+          "refId": "E"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": { "mode": "palette-classic" }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Memory Usage per Service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "process_resident_memory_bytes{job=\"matching-engine\"} / 1024 / 1024",
+          "legendFormat": "matching-engine",
+          "refId": "A"
+        },
+        {
+          "expr": "process_resident_memory_bytes{job=\"api-gateway\"} / 1024 / 1024",
+          "legendFormat": "api-gateway",
+          "refId": "B"
+        },
+        {
+          "expr": "process_resident_memory_bytes{job=\"trading-service\"} / 1024 / 1024",
+          "legendFormat": "trading-service",
+          "refId": "C"
+        },
+        {
+          "expr": "process_resident_memory_bytes{job=\"oracle-service\"} / 1024 / 1024",
+          "legendFormat": "oracle-service",
+          "refId": "D"
+        },
+        {
+          "expr": "process_resident_memory_bytes{job=\"blockchain\"} / 1024 / 1024",
+          "legendFormat": "blockchain",
+          "refId": "E"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decmbytes",
+          "color": { "mode": "palette-classic" }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Network I/O",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(node_network_receive_bytes_total[5m])) by (instance)",
+          "legendFormat": "RX {{ instance }}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(node_network_transmit_bytes_total[5m])) by (instance)",
+          "legendFormat": "TX {{ instance }}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "color": { "mode": "palette-classic" }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Disk Usage",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "(node_filesystem_size_bytes - node_filesystem_free_bytes) / node_filesystem_size_bytes * 100",
+          "legendFormat": "{{ mountpoint }}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": 0, "color": "green" },
+              { "value": 70, "color": "yellow" },
+              { "value": 85, "color": "red" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Request Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{job=\"api-gateway\"}[1m])) by (method)",
+          "legendFormat": "{{ method }}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": { "mode": "palette-classic" }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Error Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{job=\"api-gateway\", status=~\"5..\"}[5m])) by (status)",
+          "legendFormat": "{{ status }}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(http_requests_total{job=\"api-gateway\", status=~\"4..\"}[5m])) by (status)",
+          "legendFormat": "{{ status }}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": { "mode": "palette-classic" }
+        }
+      }
+    }
+  ]
+}

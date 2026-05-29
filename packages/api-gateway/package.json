@@ -1,0 +1,36 @@
+{
+  "name": "@computecoin/api-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ComputeCoin API Gateway - REST and WebSocket interface",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "fastify": "^4.26.0",
+    "@fastify/websocket": "^10.0.0",
+    "@fastify/jwt": "^8.0.0",
+    "@fastify/rate-limit": "^9.1.0",
+    "@fastify/cors": "^9.0.0",
+    "@fastify/swagger": "^8.14.0",
+    "@fastify/swagger-ui": "^3.0.0",
+    "zod": "^3.22.0",
+    "pino": "^8.19.0",
+    "dotenv": "^16.4.0",
+    "argon2": "^0.40.0",
+    "uuid": "^9.0.0",
+    "fastify-plugin": "^4.5.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^22.0.0",
+    "@types/uuid": "^9.0.0",
+    "vitest": "^1.4.0",
+    "tsx": "^4.7.0",
+    "@types/ws": "^8.5.0"
+  }
+}

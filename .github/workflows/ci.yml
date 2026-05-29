@@ -1,0 +1,197 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  RUST_VERSION: "1.92.0"
+  GO_VERSION: "1.23.4"
+  NODE_VERSION: "22"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust-check:
+    name: Rust - ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        package: [matching-engine, blockchain]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            packages/${{ matrix.package }}/target
+          key: ${{ runner.os }}-cargo-${{ matrix.package }}-${{ hashFiles('packages/' + matrix.package + '/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ matrix.package }}-
+
+      - name: Check formatting
+        working-directory: packages/${{ matrix.package }}
+        run: cargo fmt --check
+
+      - name: Run clippy
+        working-directory: packages/${{ matrix.package }}
+        run: cargo clippy -- -D warnings
+
+      - name: Run tests
+        working-directory: packages/${{ matrix.package }}
+        run: cargo test --all-features
+
+      - name: Run benchmarks (compile only)
+        working-directory: packages/${{ matrix.package }}
+        run: cargo bench --no-run
+
+  go-check:
+    name: Go - ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        package: [trading-service, oracle-service]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: packages/${{ matrix.package }}/go.sum
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          working-directory: packages/${{ matrix.package }}
+          version: latest
+
+      - name: Run tests
+        working-directory: packages/${{ matrix.package }}
+        run: go test ./... -race -coverprofile=coverage.out
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-go-${{ matrix.package }}
+          path: packages/${{ matrix.package }}/coverage.out
+
+  node-check:
+    name: Node.js - ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        package: [api-gateway, web-app]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Run lint
+        run: pnpm --filter @computecoin/${{ matrix.package }} lint
+
+      - name: Run tests
+        run: pnpm --filter @computecoin/${{ matrix.package }} test
+
+      - name: Build
+        run: pnpm --filter @computecoin/${{ matrix.package }} build
+
+  docker-build:
+    name: Docker Build - ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - matching-engine
+          - api-gateway
+          - trading-service
+          - oracle-service
+          - blockchain
+          - web-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: packages/${{ matrix.service }}/Dockerfile
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  security:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Cargo audit
+        run: |
+          cargo install cargo-audit
+          cd packages/matching-engine && cargo audit
+          cd ../blockchain && cargo audit
+
+      - name: npm audit
+        run: |
+          cd packages/api-gateway && pnpm audit --audit-level=high
+          cd ../web-app && pnpm audit --audit-level=high
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: CRITICAL,HIGH
+          exit-code: 1
