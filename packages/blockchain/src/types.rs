@@ -13,6 +13,12 @@ pub type BlockHeight = u64;
 /// Unix timestamp in seconds.
 pub type Timestamp = u64;
 
+/// Proposal identifier.
+pub type ProposalId = u64;
+
+/// Epoch number for consensus.
+pub type EpochNumber = u64;
+
 impl Address {
     /// Create an address from a hex string.
     pub fn from_hex(s: &str) -> Result<Self, hex::FromHexError> {
@@ -26,5 +32,12 @@ impl Address {
     /// Convert address to hex string.
     pub fn to_hex(&self) -> String {
         hex::encode(self.0)
+    }
+
+    /// Create an address from a byte value (for testing).
+    pub fn from_byte(b: u8) -> Self {
+        let mut addr = [0u8; 32];
+        addr[0] = b;
+        Address(addr)
     }
 }

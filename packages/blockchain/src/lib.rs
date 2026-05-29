@@ -1,5 +1,4 @@
 pub mod consensus;
-pub mod governance;
-pub mod staking;
-pub mod token;
+pub mod ibc;
+pub mod modules;
 pub mod types;
