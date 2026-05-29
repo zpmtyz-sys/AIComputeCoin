@@ -4,10 +4,10 @@ import "os"
 
 // Config holds the service configuration.
 type Config struct {
-	DatabaseURL      string
-	KafkaURL         string
+	DatabaseURL       string
+	KafkaURL          string
 	MatchingEngineURL string
-	Port             string
+	Port              string
 }
 
 // NewConfig creates a new Config from environment variables with defaults.

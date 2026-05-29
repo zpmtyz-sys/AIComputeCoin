@@ -31,9 +31,13 @@ func main() {
 	healthServer := health.NewServer()
 	grpc_health_v1.RegisterHealthServer(grpcServer, healthServer)
 
-	// Register trading service
+	// Create trading service with all components
 	tradingSvc := service.NewTradingService(cfg)
-	_ = tradingSvc // Will register with gRPC once proto is generated
+	defer tradingSvc.Stop()
+
+	// Create gRPC server wrapper
+	_ = service.NewGRPCServer(tradingSvc)
+	// Once proto is compiled, register: pb.RegisterTradingServiceServer(grpcServer, grpcSvc)
 
 	log.Printf("Trading service listening on port %s", cfg.Port)
 
