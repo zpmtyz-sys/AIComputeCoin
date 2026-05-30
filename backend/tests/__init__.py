@@ -1,0 +1,1 @@
+"""ComputeCoin test suite."""

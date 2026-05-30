@@ -1,0 +1,55 @@
+# ComputeCoin local deployment.
+#   App (API + dashboard):  http://localhost:${APP_HOST_PORT:-8788}
+#   8080 is intentionally avoided (it's used by your sub2api instance).
+#
+# Usage:  cp .env.example .env  &&  make secrets  &&  make up
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-computecoin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-computecoin}
+    ports:
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-computecoin}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "${REDIS_HOST_PORT:-6380}:6379"
+    volumes:
+      - redisdata:/data
+
+  app:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # These override .env so the app talks to the compose services by hostname.
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-computecoin}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-computecoin}
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${APP_HOST_PORT:-8788}:8000"
+    extra_hosts:
+      # Lets the container reach a sub2api instance running on the host at :8080
+      # via SUB2API_BASE_URL=http://host.docker.internal:8080
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  pgdata:
+  redisdata:
