@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ComputeCoin · 算力币交易平台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>" />
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+  <div class="max-w-6xl mx-auto px-4 py-6">
+    <!-- Header -->
+    <header class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold">⚡ ComputeCoin <span class="text-sm font-normal text-slate-400">合规版 MVP</span></h1>
+        <p class="text-xs text-slate-500">算力计量(CU) → 透明发币(CC) → 现货交易所 · 与 sub2api 集成</p>
+      </div>
+      <div id="authState" class="text-sm text-right"></div>
+    </header>
+
+    <!-- Banner -->
+    <div class="bg-amber-900/30 border border-amber-700/50 text-amber-200 text-xs rounded-lg px-4 py-2 mb-6">
+      演示环境:CC 仅可通过透明的创世分配/算力排放产生;USDC 为测试币(水龙头领取)。这不构成证券要约或投资建议。
+    </div>
+
+    <!-- Tabs -->
+    <nav class="flex gap-2 mb-6 flex-wrap">
+      <button data-tab="dashboard" class="tab-btn px-4 py-2 rounded-lg bg-slate-800">概览</button>
+      <button data-tab="market" class="tab-btn px-4 py-2 rounded-lg bg-slate-800">交易市场</button>
+      <button data-tab="contribute" class="tab-btn px-4 py-2 rounded-lg bg-slate-800">贡献算力</button>
+      <button data-tab="account" class="tab-btn px-4 py-2 rounded-lg bg-slate-800">账户</button>
+    </nav>
+
+    <!-- Auth (shown when logged out) -->
+    <section id="authSection" class="hidden">
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="bg-slate-900 rounded-xl p-5 border border-slate-800">
+          <h2 class="font-semibold mb-3">登录</h2>
+          <input id="loginEmail" type="email" placeholder="email" class="inp" />
+          <input id="loginPassword" type="password" placeholder="密码" class="inp" />
+          <button onclick="doLogin()" class="btn-primary w-full mt-2">登录</button>
+        </div>
+        <div class="bg-slate-900 rounded-xl p-5 border border-slate-800">
+          <h2 class="font-semibold mb-3">注册</h2>
+          <input id="regEmail" type="email" placeholder="email" class="inp" />
+          <input id="regPassword" type="password" placeholder="密码(≥8位)" class="inp" />
+          <select id="regRole" class="inp">
+            <option value="user">普通用户(交易)</option>
+            <option value="supplier">算力供给方</option>
+          </select>
+          <button onclick="doRegister()" class="btn-primary w-full mt-2">注册</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Dashboard -->
+    <section id="dashboard" class="tab hidden">
+      <div class="grid md:grid-cols-3 gap-4 mb-4">
+        <div class="card"><div class="card-label">CC 总量上限</div><div id="mMax" class="card-val">—</div></div>
+        <div class="card"><div class="card-label">已铸造 CC</div><div id="mMinted" class="card-val">—</div></div>
+        <div class="card"><div class="card-label">剩余可挖 CC</div><div id="mRemain" class="card-val">—</div></div>
+      </div>
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="bg-slate-900 rounded-xl p-5 border border-slate-800">
+          <h2 class="font-semibold mb-3">我的余额</h2>
+          <div id="myBalances" class="text-sm text-slate-300">登录后显示</div>
+        </div>
+        <div class="bg-slate-900 rounded-xl p-5 border border-slate-800">
+          <h2 class="font-semibold mb-3">透明账户(国库 / 创世桶)</h2>
+          <div id="publicAccounts" class="text-xs text-slate-300 space-y-1"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Market -->
+    <section id="market" class="tab hidden">
+      <div class="grid md:grid-cols-3 gap-4">
+        <div class="bg-slate-900 rounded-xl p-5 border border-slate-800">
+          <h2 class="font-semibold mb-3">做市报价(透明) <span class="text-xs text-slate-500">CC/USDC</span></h2>
+          <div id="mmQuote" class="text-sm text-slate-300">—</div>
+        </div>
+        <div class="bg-slate-900 rounded-xl p-5 border border-slate-800">
+          <h2 class="font-semibold mb-3">订单簿</h2>
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <div><div class="text-emerald-400 mb-1">买盘 Bids</div><div id="bids"></div></div>
+            <div><div class="text-rose-400 mb-1">卖盘 Asks</div><div id="asks"></div></div>
+          </div>
+        </div>
+        <div class="bg-slate-900 rounded-xl p-5 border border-slate-800">
+          <h2 class="font-semibold mb-3">下单</h2>
+          <div class="flex gap-2 mb-2">
+            <select id="ordSide" class="inp"><option value="buy">买入 CC</option><option value="sell">卖出 CC</option></select>
+            <select id="ordType" class="inp" onchange="togglePrice()"><option value="limit">限价</option><option value="market">市价</option></select>
+          </div>
+          <input id="ordPrice" type="number" step="0.00000001" placeholder="价格 (USDC)" class="inp" />
+          <input id="ordQty" type="number" step="0.00000001" placeholder="数量 (CC)" class="inp" />
+          <button onclick="placeOrder()" class="btn-primary w-full mt-1">提交订单</button>
+          <button onclick="faucet()" class="btn-ghost w-full mt-2 text-xs">领取 1000 测试 USDC</button>
+        </div>
+      </div>
+      <div class="bg-slate-900 rounded-xl p-5 border border-slate-800 mt-4">
+        <h2 class="font-semibold mb-3">最近成交</h2>
+        <div id="trades" class="text-xs text-slate-300"></div>
+      </div>
+      <div class="bg-slate-900 rounded-xl p-5 border border-slate-800 mt-4">
+        <h2 class="font-semibold mb-3">我的订单</h2>
+        <div id="myOrders" class="text-xs text-slate-300"></div>
+      </div>
+    </section>
+
+    <!-- Contribute -->
+    <section id="contribute" class="tab hidden">
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="bg-slate-900 rounded-xl p-5 border border-slate-800">
+          <h2 class="font-semibold mb-3">登记算力能力</h2>
+          <p class="text-xs text-amber-300 mb-2">仅可登记你<b>合法拥有/有权使用</b>的算力。提交即视为你作出来源合法声明。</p>
+          <select id="srcKind" class="inp" onchange="toggleSrcFields()">
+            <option value="sub2api">sub2api 网关</option>
+            <option value="gpu">GPU 节点</option>
+          </select>
+          <input id="srcName" placeholder="名称" class="inp" />
+          <input id="srcEndpoint" placeholder="sub2api 网关 URL (如 http://localhost:8080)" class="inp" />
+          <input id="srcGpu" placeholder="GPU 型号 (如 H100/A100/RTX4090)" class="inp hidden" />
+          <textarea id="srcAttest" placeholder="来源合法声明(≥10字)" class="inp h-20"></textarea>
+          <button onclick="registerSource()" class="btn-primary w-full">登记</button>
+        </div>
+        <div class="bg-slate-900 rounded-xl p-5 border border-slate-800">
+          <h2 class="font-semibold mb-3">我的算力源</h2>
+          <div id="mySources" class="text-xs text-slate-300 space-y-2"></div>
+        </div>
+      </div>
+      <div class="bg-slate-900 rounded-xl p-5 border border-slate-800 mt-4">
+        <h2 class="font-semibold mb-2">CU 估算器</h2>
+        <div class="flex gap-2 flex-wrap items-end text-xs">
+          <div><label class="block text-slate-400">模型</label><input id="cuModel" placeholder="claude-3.5-sonnet" class="inp w-44" /></div>
+          <div><label class="block text-slate-400">交付 tokens</label><input id="cuTokens" type="number" placeholder="1000000" class="inp w-32" /></div>
+          <div><label class="block text-slate-400">GPU</label><input id="cuGpu" placeholder="H100" class="inp w-28" /></div>
+          <div><label class="block text-slate-400">小时</label><input id="cuHours" type="number" placeholder="1" class="inp w-20" /></div>
+          <button onclick="cuQuote()" class="btn-primary">估算 CU</button>
+          <span id="cuResult" class="text-emerald-400"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Account -->
+    <section id="account" class="tab hidden">
+      <div class="bg-slate-900 rounded-xl p-5 border border-slate-800">
+        <h2 class="font-semibold mb-3">账户信息</h2>
+        <div id="acctInfo" class="text-sm text-slate-300"></div>
+        <button onclick="logout()" class="btn-ghost mt-3">退出登录</button>
+      </div>
+    </section>
+
+    <p id="toast" class="fixed bottom-4 right-4 bg-slate-800 border border-slate-700 px-4 py-2 rounded-lg text-sm hidden"></p>
+    <footer class="text-center text-xs text-slate-600 mt-10">
+      ComputeCoin 合规版 · 投资人联系 水镜先生 zpmtyz@gmail.com · <a href="/docs" class="underline">API 文档</a>
+    </footer>
+  </div>
+
+  <style>
+    .inp{width:100%;background:#0f172a;border:1px solid #1e293b;border-radius:.5rem;padding:.5rem .75rem;margin-bottom:.5rem;color:#e2e8f0;font-size:.875rem}
+    .btn-primary{background:#4f46e5;padding:.5rem .75rem;border-radius:.5rem;font-size:.875rem;font-weight:600}
+    .btn-primary:hover{background:#4338ca}
+    .btn-ghost{background:#1e293b;padding:.4rem .75rem;border-radius:.5rem}
+    .card{background:#0f172a;border:1px solid #1e293b;border-radius:.75rem;padding:1rem}
+    .card-label{font-size:.7rem;color:#64748b}
+    .card-val{font-size:1.25rem;font-weight:700;margin-top:.25rem}
+    .tab-btn.active{background:#4f46e5}
+  </style>
+
+  <script>
+    const API = "/api";
+    let token = localStorage.getItem("cc_token") || null;
+    let me = null;
+
+    function toast(msg, ok=true){
+      const t = document.getElementById("toast");
+      t.textContent = msg;
+      t.className = "fixed bottom-4 right-4 px-4 py-2 rounded-lg text-sm " + (ok ? "bg-emerald-700" : "bg-rose-700");
+      setTimeout(()=>t.classList.add("hidden"), 3000);
+      t.classList.remove("hidden");
+    }
+
+    async function api(path, opts={}){
+      opts.headers = Object.assign({"Content-Type":"application/json"}, opts.headers||{});
+      if(token) opts.headers["Authorization"] = "Bearer " + token;
+      const res = await fetch(API + path, opts);
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : {};
+      if(!res.ok){
+        const msg = data?.error?.message || data?.detail || res.statusText;
+        throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+      }
+      return data;
+    }
+
+    // ---- Auth ----
+    async function doRegister(){
+      try{
+        await api("/auth/register", {method:"POST", body: JSON.stringify({
+          email: regEmail.value, password: regPassword.value, role: regRole.value
+        })});
+        toast("注册成功,请登录");
+        loginEmail.value = regEmail.value;
+      }catch(e){ toast(e.message, false); }
+    }
+    async function doLogin(){
+      try{
+        const d = await api("/auth/login", {method:"POST", body: JSON.stringify({
+          email: loginEmail.value, password: loginPassword.value
+        })});
+        token = d.access_token; localStorage.setItem("cc_token", token);
+        await refreshMe(); toast("登录成功"); showTab("dashboard");
+      }catch(e){ toast(e.message, false); }
+    }
+    function logout(){ token=null; me=null; localStorage.removeItem("cc_token"); renderAuthState(); showTab("dashboard"); }
+
+    async function refreshMe(){
+      if(!token){ me=null; renderAuthState(); return; }
+      try{ me = await api("/auth/me"); }catch(e){ me=null; token=null; localStorage.removeItem("cc_token"); }
+      renderAuthState();
+    }
+    function renderAuthState(){
+      const el = document.getElementById("authState");
+      if(me){ el.innerHTML = `<div>${me.email}</div><div class="text-xs text-slate-500">${me.role} · KYC: ${me.kyc_status}</div>`; }
+      else { el.innerHTML = `<span class="text-slate-500">未登录</span>`; }
+    }
+
+    // ---- Tabs ----
+    function showTab(name){
+      document.querySelectorAll(".tab").forEach(s=>s.classList.add("hidden"));
+      document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
+      document.querySelector(`[data-tab="${name}"]`)?.classList.add("active");
+      const authNeeded = (name!=="dashboard" && name!=="market");
+      if(authNeeded && !me){ document.getElementById("authSection").classList.remove("hidden"); }
+      else { document.getElementById("authSection").classList.add("hidden"); document.getElementById(name).classList.remove("hidden"); }
+      if(name==="dashboard") loadDashboard();
+      if(name==="market") loadMarket();
+      if(name==="contribute") loadSources();
+      if(name==="account") loadAccount();
+    }
+    document.querySelectorAll(".tab-btn").forEach(b=> b.onclick = ()=>showTab(b.dataset.tab));
+
+    // ---- Dashboard ----
+    async function loadDashboard(){
+      try{
+        const s = await api("/ledger/supply");
+        mMax.textContent = (+s.max_supply).toLocaleString();
+        mMinted.textContent = (+s.minted).toLocaleString();
+        mRemain.textContent = (+s.remaining_to_mint).toLocaleString();
+      }catch(e){}
+      if(me){
+        try{
+          const b = await api("/ledger/balance");
+          myBalances.innerHTML = b.balances.length ? b.balances.map(x=>`<div>${x.asset}: <b>${x.amount}</b></div>`).join("") : "暂无余额";
+        }catch(e){ myBalances.textContent = "—"; }
+      }
+      const refs = ["treasury","genesis:team","genesis:ecosystem","genesis:investors","genesis:treasury"];
+      const out = [];
+      for(const r of refs){
+        try{ const a = await api("/ledger/accounts/"+encodeURIComponent(r));
+          const cc = a.balances.find(x=>x.asset==="CC");
+          out.push(`<div><span class="text-slate-500">${r}</span>: ${cc?cc.amount:"0"} CC</div>`);
+        }catch(e){}
+      }
+      publicAccounts.innerHTML = out.join("");
+    }
+
+    // ---- Market ----
+    async function loadMarket(){
+      try{
+        const q = await api("/mm/quotes");
+        mmQuote.innerHTML = `中间价 <b>${q.mid}</b><br>买 ${q.bid} / 卖 ${q.ask}<br><span class="text-slate-500">价差 ${q.spread_bps} bps · 参考:${q.reference_used}</span>`;
+      }catch(e){}
+      try{
+        const ob = await api("/exchange/orderbook?pair=CC/USDC");
+        bids.innerHTML = ob.bids.map(l=>`<div class="text-emerald-400">${(+l.price).toFixed(4)} <span class="text-slate-500">× ${(+l.qty).toFixed(2)}</span></div>`).join("") || "—";
+        asks.innerHTML = ob.asks.map(l=>`<div class="text-rose-400">${(+l.price).toFixed(4)} <span class="text-slate-500">× ${(+l.qty).toFixed(2)}</span></div>`).join("") || "—";
+      }catch(e){}
+      try{
+        const tr = await api("/exchange/trades?pair=CC/USDC&limit=15");
+        trades.innerHTML = tr.map(t=>`<div>${new Date(t.created_at).toLocaleTimeString()} · ${(+t.price).toFixed(4)} × ${(+t.qty).toFixed(2)}</div>`).join("") || "暂无成交";
+      }catch(e){}
+      if(me){
+        try{
+          const os = await api("/exchange/orders?open_only=false");
+          myOrders.innerHTML = os.map(o=>`<div>#${o.id} ${o.side} ${o.type} ${o.price||"-"} × ${o.qty} (成交 ${o.filled}) <b>${o.status}</b> ${["open","partial"].includes(o.status)?`<button onclick="cancelOrder(${o.id})" class="text-rose-400 underline">撤</button>`:""}</div>`).join("") || "暂无订单";
+        }catch(e){ myOrders.textContent="登录后显示"; }
+      } else { myOrders.textContent = "登录后显示"; }
+    }
+    function togglePrice(){ ordPrice.style.display = ordType.value==="market" ? "none":"block"; }
+    async function placeOrder(){
+      if(!me) return toast("请先登录", false);
+      try{
+        const body = { pair:"CC/USDC", side: ordSide.value, type: ordType.value, qty: ordQty.value };
+        if(ordType.value==="limit") body.price = ordPrice.value;
+        await api("/exchange/orders", {method:"POST", body: JSON.stringify(body)});
+        toast("下单成功"); loadMarket();
+      }catch(e){ toast(e.message, false); }
+    }
+    async function cancelOrder(id){ try{ await api("/exchange/orders/"+id, {method:"DELETE"}); toast("已撤单"); loadMarket(); }catch(e){ toast(e.message,false);} }
+    async function faucet(){
+      if(!me) return toast("请先登录", false);
+      try{ await api("/ledger/faucet", {method:"POST", body: JSON.stringify({asset:"USDC", amount:1000})}); toast("已领取 1000 测试 USDC"); loadDashboard(); }
+      catch(e){ toast(e.message, false); }
+    }
+
+    // ---- Contribute ----
+    function toggleSrcFields(){
+      const gpu = srcKind.value==="gpu";
+      srcGpu.classList.toggle("hidden", !gpu);
+      srcEndpoint.classList.toggle("hidden", gpu);
+    }
+    async function registerSource(){
+      if(!me) return toast("请先登录", false);
+      try{
+        const body = { kind: srcKind.value, name: srcName.value, source_attestation: srcAttest.value };
+        if(srcKind.value==="sub2api") body.endpoint = srcEndpoint.value; else body.gpu_model = srcGpu.value;
+        await api("/relay/sources", {method:"POST", body: JSON.stringify(body)});
+        toast("已登记"); loadSources();
+      }catch(e){ toast(e.message, false); }
+    }
+    async function loadSources(){
+      if(!me){ mySources.textContent="登录后显示"; return; }
+      try{
+        const ss = await api("/relay/sources");
+        mySources.innerHTML = ss.map(s=>`<div class="border-b border-slate-800 pb-1">#${s.id} ${s.kind} · ${s.name} · ${s.verified?'<span class="text-emerald-400">已验证</span>':'<span class="text-amber-400">未验证</span>'} ${!s.verified?`<button onclick="verifySource(${s.id})" class="underline text-indigo-400">验证</button>`:""}</div>`).join("") || "暂无";
+      }catch(e){ mySources.textContent="—"; }
+    }
+    async function verifySource(id){ try{ await api("/compute/verify/"+id, {method:"POST"}); toast("验证完成"); loadSources(); }catch(e){ toast(e.message,false);} }
+    async function cuQuote(){
+      try{
+        const p = new URLSearchParams();
+        if(cuModel.value) p.set("model", cuModel.value);
+        if(cuTokens.value) p.set("tokens", cuTokens.value);
+        if(cuGpu.value) p.set("gpu_model", cuGpu.value);
+        if(cuHours.value) p.set("hours", cuHours.value);
+        const d = await api("/compute/cu/quote?"+p.toString());
+        cuResult.textContent = `≈ ${d.cu} CU`;
+      }catch(e){ toast(e.message, false); }
+    }
+
+    // ---- Account ----
+    function loadAccount(){
+      acctInfo.innerHTML = me ? `<div>ID: ${me.id}</div><div>邮箱: ${me.email}</div><div>角色: ${me.role}</div><div>KYC: ${me.kyc_status}</div><div>账户: user:${me.id}</div>` : "请先登录";
+    }
+
+    // init
+    (async function(){ await refreshMe(); showTab("dashboard"); togglePrice(); toggleSrcFields(); })();
+  </script>
+</body>
+</html>
